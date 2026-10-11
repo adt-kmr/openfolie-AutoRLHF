@@ -23,14 +23,29 @@ judgements) and, if you explicitly enable them, the optional W&B/Weave trackers.
 ## Install
 
 ```bash
-uv sync                 # core app
-uv sync --extra tracking # optional W&B + Weave
-uv sync --extra qlora    # optional 4-bit fine-tuning (CUDA only)
-uv sync --all-extras     # everything
+uv sync                         # CUDA 12.4 Torch on Linux; CPU still works without a GPU
+uv sync --extra tracking       # optional W&B + Weave
+uv sync --extra qlora          # optional bitsandbytes for CUDA QLoRA
+uv sync --all-extras           # everything
 ```
 
-Requires Python 3.11 or 3.12. There is no GPU requirement for the core app; CPU-only
-machines can still generate/judge/curate data and run the tiny CPU LoRA preset.
+On Linux, `pyproject.toml` and `uv.lock` pin Torch 2.6.0 to the official CUDA 12.4
+index. This avoids silently resolving a newer CUDA runtime that the installed NVIDIA
+driver cannot initialize. Use the project `.venv`; do not activate a second environment.
+
+On shared GPU hosts that export a global `LD_LIBRARY_PATH`, remove it for the project
+shell if it points at another Python installation's Torch/NCCL libraries:
+
+```bash
+unset VIRTUAL_ENV LD_LIBRARY_PATH
+uv sync
+uv run python -c 'import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")'
+uv run autorlhf --doctor
+```
+
+Requires Python 3.11 or 3.12. CPU-only machines can still generate/judge/curate data and
+run the tiny CPU LoRA preset.
+
 
 ## Credentials
 

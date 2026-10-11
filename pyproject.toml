@@ -20,6 +20,8 @@ dependencies = [
     "trl>=0.12",
     "peft>=0.13",
     "accelerate>=1.0",
+    # Pin a driver-compatible CUDA runtime on Linux; uv selects the cu124 wheel below.
+    "torch==2.6.0",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +43,13 @@ packages = ["src/autorlhf"]
 
 [tool.uv]
 package = true
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu124", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
