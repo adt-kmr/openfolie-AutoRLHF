@@ -130,10 +130,17 @@ async def test_training_screen_renders_an_event_stream(app_paths, store, bus, ru
             phase="evaluate",
             verbose_only=True,
         )
+        bus.emit(
+            "log",
+            "API request POST https://openrouter.ai/api/v1/chat/completions\n{\n  \"model\": \"test-model\"\n}",
+            run_id=run_id,
+            phase="evaluate",
+            verbose_only=True,
+        )
         await app._event_queue.join()
         await pilot.pause()
         assert "evaluating base: 1/3" in screen.query_one("#training-log", LogPane).text()
-
+        assert "API request POST https://openrouter.ai/api/v1/chat/completions" in screen.query_one("#training-log", LogPane).text()
 
 async def test_metric_burst_batches_state_panel_refreshes(app_paths, store, bus, run_config):
     run_id, _paths = make_run(store, app_paths, run_config, status=RunStatus.TRAINING_DPO)

@@ -101,12 +101,13 @@ def _no_sleep(monkeypatch):
     monkeypatch.setattr(client_module.time, "sleep", lambda *_: None)
 
 
-def make_client(*, cache=None, max_retries=2, sdk=None) -> OpenRouterClient:
+def make_client(*, cache=None, max_retries=2, sdk=None, trace=None) -> OpenRouterClient:
     client = OpenRouterClient(
         "sk-or-v1-test",
         max_retries=max_retries,
         cache=cache,
         run_id="run-1",
+        trace=trace,
     )
     client._sdk = sdk or FakeSDK()
     return client
@@ -158,6 +159,22 @@ def test_chat_sends_decoding_parameters_and_normalises_messages():
     assert call["max_tokens"] == 9
     assert call["seed"] == 4
     assert call["response_format"] == {"type": "json_object"}
+
+
+def test_chat_verbose_trace_contains_request_and_response_payloads():
+    traces: list[str] = []
+    client = make_client(
+        sdk=FakeSDK(chat=FakeChat([chat_payload("response body")])),
+        trace=traces.append,
+    )
+    client.chat(model="m", messages=[ChatMessage(role="user", content="private question")])
+
+    trace = "\n".join(traces)
+    assert "API request POST https://openrouter.ai/api/v1/chat/completions" in trace
+    assert "private question" in trace
+    assert "API response POST /api/v1/chat/completions" in trace
+    assert "response body" in trace
+    assert "sk-or-v1-test" not in trace
 
 
 def test_chat_rejects_empty_completion():
@@ -215,10 +232,12 @@ def test_extract_json_object_handles_embedded_and_nested_braces():
 
 def test_rate_limit_then_success_retries():
     sdk = FakeSDK(chat=FakeChat([FakeHTTPError(429, {"retry-after": "0"}), chat_payload()]))
-    client = make_client(sdk=sdk)
+    traces: list[str] = []
+    client = make_client(sdk=sdk, trace=traces.append)
     result = client.chat(model="m", messages=[ChatMessage(role="user", content="hi")])
     assert result.text == "hello there"
     assert len(sdk.chat.calls) == 2
+    assert any("API retry chat completion (m): rate limited" in entry for entry in traces)
 
 
 def test_exhausted_retries_raise_rate_limited():
@@ -318,8 +337,14 @@ def _response(answers: dict) -> dict:
 
 def test_decide_uses_the_decisions_server_url_and_validates():
     decisions = FakeDecisions([_response({"urgency": {"type": "score", "score": 2.0}})])
-    client = make_client(sdk=FakeSDK(decisions=decisions))
+    traces: list[str] = []
+    client = make_client(sdk=FakeSDK(decisions=decisions), trace=traces.append)
     response = client.decide(_decisions_request())
+    trace = "\n".join(traces)
+    assert "API request POST https://openrouter.ai/api/alpha/decisions" in trace
+    assert '"task": "x"' in trace
+    assert "API response POST /api/alpha/decisions" in trace
+    assert "gen-dec-1" in trace
     call = decisions.calls[0]
     assert call["server_url"] == DECISIONS_SERVER_URL
     assert call["model"] == "typesafe/jev-1.13"

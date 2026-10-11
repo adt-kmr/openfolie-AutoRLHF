@@ -101,7 +101,8 @@ def test_evaluate_model_aggregates_scored_responses_only(monkeypatch, rubric):
     assert "note" in report.warnings
     assert jev.calls == 1  # the failed generation was never judged
     events = bus.history()
-    assert any(event.verbose_only and "API request POST" in event.message for event in events)
+    assert any(event.verbose_only and "local inference start base 1/2" in event.message for event in events)
+    assert any(event.verbose_only and "starting Jev evaluation model=typesafe/jev-1.13" in event.message for event in events)
     sample = next(event for event in events if event.kind == "sample")
     assert sample.data["prompt"] == "question p1"
     assert sample.data["response"] == "answer one"

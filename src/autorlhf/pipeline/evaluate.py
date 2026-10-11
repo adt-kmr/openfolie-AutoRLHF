@@ -302,6 +302,17 @@ def evaluate_model(
             break
         if not wait_if_paused(pause_event, cancel_event):
             break
+        if bus is not None:
+            bus.emit(
+                "log",
+                f"local inference start {variant} {index + 1}/{total} prompt={prompt.prompt_id} "
+                f"model={handle.model_id} max_new_tokens={max_new_tokens} "
+                f"temperature={temperature} top_p={top_p} seed={seed + index}\n"
+                f"input prompt: {prompt.text}",
+                run_id=run_id,
+                phase="evaluate",
+                verbose_only=True,
+            )
         response = generate_eval_response(
             handle,
             prompt,
@@ -336,9 +347,8 @@ def evaluate_model(
                 if bus is not None:
                     bus.emit(
                         "log",
-                        f"API request POST https://openrouter.ai/api/alpha/decisions "
-                        f"model={judge_model} variant={variant} prompt={prompt.prompt_id} "
-                        f"pass={pass_index + 1}/{repeats}",
+                        f"starting Jev evaluation model={judge_model} variant={variant} "
+                        f"prompt={prompt.prompt_id} pass={pass_index + 1}/{repeats}",
                         run_id=run_id,
                         phase="evaluate",
                         verbose_only=True,
@@ -349,9 +359,8 @@ def evaluate_model(
                 if bus is not None:
                     bus.emit(
                         "log",
-                        f"API response POST /api/alpha/decisions model={judge_model} "
-                        f"prompt={prompt.prompt_id} in {time.monotonic() - started:.2f}s "
-                        f"cached={result.cached} usage={result.usage}",
+                        f"Jev evaluation complete model={judge_model} prompt={prompt.prompt_id} "
+                        f"in {time.monotonic() - started:.2f}s cached={result.cached} usage={result.usage}",
                         run_id=run_id,
                         phase="evaluate",
                         verbose_only=True,

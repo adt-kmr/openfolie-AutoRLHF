@@ -114,9 +114,7 @@ Runs are resumable from their last complete checkpoint — resuming reloads the 
 
 Inspect a run with `--list-runs` and `--export`, or open the dashboard (`autorlhf`) and
 browse its phases, metrics, samples, and full `history.jsonl`. In the live run screen, enable
-Verbose (or press `v`) to stream per-prompt evaluation, generation/judgement details,
-and OpenRouter API request/response activity into the Activity widget. These verbose events
-are also retained in the run history.
+Verbose (or press v) streams per-prompt evaluation progress, prompts, generated responses, and judgements. It also logs full OpenRouter chat and Jev request/response payloads, cache hits, and call latency in Activity; authentication credentials are not included. These verbose events are retained in the run history.
 
 Use **Abandon** (or press x) on an incomplete run in the dashboard to permanently delete its database record and run artifacts. A confirmation prompt prevents accidental deletion.
 

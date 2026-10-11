@@ -90,6 +90,7 @@ class PipelineContext:
                     cache=self.cache,
                     run_id=self.run_id,
                     app_title="autorlhf",
+                    trace=self._trace_api,
                 )
             return self._openrouter
 
@@ -120,9 +121,17 @@ class PipelineContext:
         kw.setdefault("verbose_only", not self.verbose and kind == "log")
         return self.bus.emit(kind, message, run_id=self.run_id, **kw)
 
+    def _trace_api(self, message: str) -> None:
+        self.bus.emit(
+            "log",
+            message,
+            run_id=self.run_id,
+            phase=self.phase,
+            verbose_only=True,
+        )
+
     def progress(self, message: str, *, fraction: float | None = None, **data: Any) -> Event:
         return self.emit("progress", message, fraction=fraction, **data)
-
     # -- cooperative control ----------------------------------------------- #
 
     def cancelled(self) -> bool:

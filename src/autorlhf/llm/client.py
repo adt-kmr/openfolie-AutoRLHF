@@ -316,11 +316,12 @@ class OpenRouterClient:
         cache: ResponseCache | None = None,
         run_id: str = "",
         app_title: str = "autorlhf",
+        trace: Callable[[str], None] | None = None,
     ) -> None:
         if not api_key or not api_key.strip():
             raise CredentialError(
                 "no OpenRouter API key is configured",
-                hint="Run `autorlhf --setup` to store OPENROUTER_API_KEY, then retry.",
+                hint="Run autorlhf --setup to store OPENROUTER_API_KEY, then retry.",
             )
         self._api_key = api_key.strip()
         self.timeout_s = float(timeout_s)
@@ -329,6 +330,7 @@ class OpenRouterClient:
         self.cache = cache
         self.run_id = run_id
         self.app_title = app_title
+        self.trace = trace
 
         self._sdk: Any | None = None
         self._lock = threading.Lock()
@@ -356,6 +358,20 @@ class OpenRouterClient:
                 )
             return self._sdk
 
+    def _trace_api(self, message: str) -> None:
+        if self.trace is None:
+            return
+        try:
+            self.trace(message.replace(self._api_key, "[redacted]"))
+        except Exception:  # noqa: BLE001 - observability must not break an API call
+            logger.exception("verbose API trace callback failed")
+
+    def _trace_payload(self, label: str, payload: Any) -> None:
+        if self.trace is not None:
+            self._trace_api(
+                f"{label}\n{json.dumps(payload, ensure_ascii=False, indent=2, default=str)}"
+            )
+
     def _call_sdk(self, fn: Callable[[], Any], *, what: str) -> Any:
         """Invoke an SDK callable, translating every failure into a typed error."""
 
@@ -378,6 +394,10 @@ class OpenRouterClient:
                     self._bump("errors")
                     raise
                 delay = exc.retry_after if exc.retry_after is not None else _backoff(attempt)
+                self._trace_api(
+                    f"API retry {what}: rate limited; waiting {delay:.1f}s "
+                    f"(retry {attempt + 1}/{self.max_retries})"
+                )
                 logger.warning(
                     "%s was rate limited; retrying in %.1fs (attempt %d/%d)",
                     what,
@@ -395,6 +415,10 @@ class OpenRouterClient:
                     self._bump("errors")
                     raise
                 delay = _backoff(attempt)
+                self._trace_api(
+                    f"API retry {what}: {exc}; waiting {delay:.1f}s "
+                    f"(retry {attempt + 1}/{self.max_retries})"
+                )
                 logger.warning(
                     "%s failed (%s); retrying in %.1fs (attempt %d/%d)",
                     what,
@@ -510,22 +534,32 @@ class OpenRouterClient:
             result = GenerationResult.model_validate(cached["result"])
             result.cached = True
             self._bump("cache_hits")
+            self._trace_api(f"API cache HIT POST /api/v1/chat/completions model={model}; no request sent")
             return result
 
+        self._trace_payload("API request POST https://openrouter.ai/api/v1/chat/completions", request_payload)
         started = time.monotonic()
-        raw = self._request(
-            lambda: self._get_sdk().chat.send(
-                model=model,
-                messages=wire_messages,
-                temperature=float(temperature),
-                top_p=float(top_p),
-                max_tokens=int(max_tokens),
-                seed=seed,
-                response_format=response_format,
-            ),
-            what=f"chat completion ({model})",
-        )
+        try:
+            raw = self._request(
+                lambda: self._get_sdk().chat.send(
+                    model=model,
+                    messages=wire_messages,
+                    temperature=float(temperature),
+                    top_p=float(top_p),
+                    max_tokens=int(max_tokens),
+                    seed=seed,
+                    response_format=response_format,
+                ),
+                what=f"chat completion ({model})",
+            )
+        except Exception as exc:
+            self._trace_api(f"API error POST /api/v1/chat/completions model={model}: {exc}")
+            raise
         latency_s = time.monotonic() - started
+        self._trace_payload(
+            f"API response POST /api/v1/chat/completions model={model} latency={latency_s:.2f}s",
+            _to_dict(raw),
+        )
 
         try:
             completion = ChatCompletionResponse.model_validate(_to_dict(raw))
@@ -642,10 +676,22 @@ class OpenRouterClient:
             self._bump("cache_hits")
             response = DecisionsResponse.model_validate(cached["response"])
             self._check_answers(request, response)
+            self._trace_api(f"API cache HIT POST /api/alpha/decisions model={request.model}; no request sent")
             return response
 
-        raw = self._request(
-            lambda: self._decisions_call(request, questions), what=f"Jev decision ({request.model})"
+        self._trace_payload("API request POST https://openrouter.ai/api/alpha/decisions", payload)
+        started = time.monotonic()
+        try:
+            raw = self._request(
+                lambda: self._decisions_call(request, questions),
+                what=f"Jev decision ({request.model})",
+            )
+        except Exception as exc:
+            self._trace_api(f"API error POST /api/alpha/decisions model={request.model}: {exc}")
+            raise
+        self._trace_payload(
+            f"API response POST /api/alpha/decisions model={request.model} latency={time.monotonic() - started:.2f}s",
+            _to_dict(raw),
         )
         try:
             response = DecisionsResponse.model_validate(_to_dict(raw))
