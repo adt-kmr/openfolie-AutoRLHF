@@ -303,8 +303,10 @@ class PipelineRunner:
                 pause_event=self.ctx.pause_event,
             )
         self.ctx.emit(
-            "log", f"prompt generation complete: {len(prompts)} prompts",
-            phase="data", verbose_only=True,
+            "log",
+            f"prompt generation complete: {len(prompts)} prompts",
+            phase="data",
+            verbose_only=True,
         )
         if not prompts:
             raise InsufficientDataError(
@@ -325,7 +327,8 @@ class PipelineRunner:
             f"prompt splits assigned: train={len(assignment.prompt_ids(SplitName.TRAIN))}, "
             f"validation={len(assignment.prompt_ids(SplitName.VALIDATION))}, "
             f"eval={len(assignment.prompt_ids(SplitName.EVAL))}",
-            phase="data", verbose_only=True,
+            phase="data",
+            verbose_only=True,
         )
 
         eval_prompts = build_eval_prompts(
@@ -343,8 +346,10 @@ class PipelineRunner:
                 ),
             )
         self.ctx.emit(
-            "log", f"held-out eval prompts prepared: {len(eval_prompts)}",
-            phase="data", verbose_only=True,
+            "log",
+            f"held-out eval prompts prepared: {len(eval_prompts)}",
+            phase="data",
+            verbose_only=True,
         )
         rewrite_records(
             self.paths.eval_prompts_path,
@@ -376,15 +381,18 @@ class PipelineRunner:
         finally:
             generator.close()
         self.ctx.emit(
-            "log", f"candidate generation complete: {len(candidates)} candidates",
-            phase="generate", verbose_only=True,
+            "log",
+            f"candidate generation complete: {len(candidates)} candidates",
+            phase="generate",
+            verbose_only=True,
         )
         judgements, new_judgement_records = self._judge_candidates(prompts, candidates, existing)
         self.ctx.emit(
             "log",
             f"candidate judging complete: {len(judgements)} judgements, "
             f"{len(new_judgement_records)} newly scored",
-            phase="generate", verbose_only=True,
+            phase="generate",
+            verbose_only=True,
         )
         self._append_new_judgements(self.paths.judgments_path, new_judgement_records)
         self._apply_judgement_status(candidates, judgements)
@@ -402,8 +410,10 @@ class PipelineRunner:
         ]
         rewrite_records(self.paths.dataset_path, records)
         self.ctx.emit(
-            "log", f"dataset records written: {len(records)} candidates",
-            phase="data", verbose_only=True,
+            "log",
+            f"dataset records written: {len(records)} candidates",
+            phase="data",
+            verbose_only=True,
         )
         self.ctx.emit(
             "artifact",
@@ -428,8 +438,10 @@ class PipelineRunner:
         )
         rewrite_records(self.paths.sft_path, sft_records)
         self.ctx.emit(
-            "log", f"supervised fine-tuning records written: {len(sft_records)}",
-            phase="data", verbose_only=True,
+            "log",
+            f"supervised fine-tuning records written: {len(sft_records)}",
+            phase="data",
+            verbose_only=True,
         )
         counters = compute_counters(
             prompts=prompts,
@@ -875,14 +887,21 @@ class PipelineRunner:
         self.ctx.set_phase("evaluate")
         self.ctx.set_status(RunStatus.EVALUATING_BASE)
         self.ctx.emit("phase", "baseline evaluation", phase="evaluate")
+        self.ctx.emit("log", "loading held-out baseline evaluation prompts", phase="evaluate")
         prompts = self._eval_prompts()
         if not prompts:
             raise InsufficientDataError(
                 "no held-out evaluation prompts are available",
                 hint="Run dataset preparation first so eval_prompts.jsonl is written.",
             )
+        self.ctx.emit(
+            "log", f"loaded {len(prompts)} held-out prompts; loading base model", phase="evaluate"
+        )
         handle = load_eval_model(
             config=self.config, variant="base", adapter_path=None, hf_token=self.ctx.hf_token
+        )
+        self.ctx.emit(
+            "log", "base model loaded; starting response generation and judging", phase="evaluate"
         )
         report = evaluate_model(
             handle=handle,

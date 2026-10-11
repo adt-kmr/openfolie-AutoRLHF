@@ -283,6 +283,14 @@ def evaluate_model(
         requested_judgements=len(prompts),
     )
     report.warnings.extend(handle.notes)
+    if bus is not None:
+        bus.emit(
+            "log",
+            f"loading/generating {variant} responses for {len(prompts)} held-out prompts",
+            run_id=run_id,
+            phase="evaluate",
+            verbose_only=True,
+        )
 
     criterion_sums: dict[str, float] = defaultdict(float)
     criterion_counts: dict[str, int] = defaultdict(int)
@@ -303,13 +311,51 @@ def evaluate_model(
             seed=seed + index,
         )
         report.responses.append(response)
+        if bus is not None:
+            bus.emit(
+                "log",
+                (
+                    f"generated {variant} response for prompt {prompt.prompt_id} "
+                    f"({response.tokens or 0} tokens, {response.latency_s or 0:.2f}s)"
+                    if not response.error
+                    else f"generation failed for {variant} prompt {prompt.prompt_id}: {response.error}"
+                ),
+                run_id=run_id,
+                phase="evaluate",
+                level="warning" if response.error else "debug",
+                verbose_only=True,
+            )
+        judgement: Judgement | None = None
         if response.error or not response.text.strip():
             report.failed_judgements += 1
             report.missing_prompt_ids.append(prompt.prompt_id)
         else:
             passes: list[Judgement] = []
-            for _ in range(max(1, int(judge_repeats))):
+            repeats = max(1, int(judge_repeats))
+            for pass_index in range(repeats):
+                if bus is not None:
+                    bus.emit(
+                        "log",
+                        f"API request POST https://openrouter.ai/api/alpha/decisions "
+                        f"model={judge_model} variant={variant} prompt={prompt.prompt_id} "
+                        f"pass={pass_index + 1}/{repeats}",
+                        run_id=run_id,
+                        phase="evaluate",
+                        verbose_only=True,
+                    )
+                started = time.monotonic()
                 passes.append(_judge_once(jev, prompt, variant, response.text, handle.model_id))
+                result = passes[-1]
+                if bus is not None:
+                    bus.emit(
+                        "log",
+                        f"API response POST /api/alpha/decisions model={judge_model} "
+                        f"prompt={prompt.prompt_id} in {time.monotonic() - started:.2f}s "
+                        f"cached={result.cached} usage={result.usage}",
+                        run_id=run_id,
+                        phase="evaluate",
+                        verbose_only=True,
+                    )
             judgement = _merge_judgements(passes, rubric)
             report.judgements.append(judgement)
             if judgement.error is not None and all(
@@ -328,11 +374,23 @@ def evaluate_model(
                     overall_values.append(judgement.overall)
         if bus is not None:
             bus.emit(
+                "sample",
+                f"{variant} evaluation prompt {prompt.prompt_id}",
+                run_id=run_id,
+                phase="evaluate",
+                prompt=prompt.text,
+                response=response.text,
+                judgement=judgement.model_dump(mode="json") if judgement is not None else None,
+                error=response.error,
+                verbose_only=True,
+            )
+            bus.emit(
                 "progress",
                 f"evaluating {variant}: {index + 1}/{total}",
                 run_id=run_id,
                 phase="evaluate",
                 fraction=(index + 1) / max(1, total),
+                verbose_only=True,
                 variant=variant,
             )
 

@@ -112,7 +112,6 @@ class AutorlhfApp(App[None]):
         if self._event_consumer is not None:
             self._event_consumer.cancel()
 
-
     # -- bus plumbing ------------------------------------------------------ #
 
     def _subscribe_bus(self) -> None:
@@ -174,6 +173,7 @@ class AutorlhfApp(App[None]):
             for event in events:
                 loop.call_soon_threadsafe(self._queue_event, handler, event)
         return len(events)
+
     # -- run identity ------------------------------------------------------ #
 
     def adopt_run(self, run_id: str) -> bool:

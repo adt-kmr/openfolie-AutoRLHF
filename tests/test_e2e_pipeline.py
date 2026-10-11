@@ -482,7 +482,9 @@ def test_prepare_dataset_review_and_baseline(
         baseline = runner.run_baseline_eval()
         assert baseline.variant == "base"
         assert baseline.scored_responses > 0
-        assert baseline.failed_judgements + baseline.scored_responses == baseline.requested_judgements
+        assert (
+            baseline.failed_judgements + baseline.scored_responses == baseline.requested_judgements
+        )
         assert baseline.criterion_means
         assert baseline.overall_mean is not None
         assert paths.baseline_eval_path.is_file()

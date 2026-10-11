@@ -118,9 +118,21 @@ async def test_training_screen_renders_an_event_stream(app_paths, store, bus, ru
             run_id=run_id,
             prompt="And the tide?",
             response="It turns at dusk.",
+            judgement={"overall": 3.4, "criterion_scores": {"voice": {"score": 3.1}}},
         )
         await pilot.pause()
         assert "It turns at dusk." in screen.query_one("#training-samples", LogPane).text()
+        assert "criterion_scores" in screen.query_one("#training-samples", LogPane).text()
+        bus.emit(
+            "progress",
+            "evaluating base: 1/3",
+            run_id=run_id,
+            phase="evaluate",
+            verbose_only=True,
+        )
+        await app._event_queue.join()
+        await pilot.pause()
+        assert "evaluating base: 1/3" in screen.query_one("#training-log", LogPane).text()
 
 
 async def test_metric_burst_batches_state_panel_refreshes(app_paths, store, bus, run_config):
@@ -143,9 +155,7 @@ async def test_metric_burst_batches_state_panel_refreshes(app_paths, store, bus,
 
         screen._render_kv = count_refreshes
         for step in range(100):
-            bus.emit(
-                "metric", "loss", run_id=run_id, name_key="loss", value=step / 1000, step=step
-            )
+            bus.emit("metric", "loss", run_id=run_id, name_key="loss", value=step / 1000, step=step)
         await pilot.pause(0.1)
         await app._event_queue.join()
         await pilot.pause(0.1)
@@ -199,6 +209,7 @@ async def test_elapsed_timer_ticks_while_worker_blocks(app_paths, store, bus, ru
         finally:
             blocker.set()
             worker.join(timeout=1)
+
 
 async def test_training_screen_replays_history_on_mount(app_paths, store, bus, run_config):
     run_id, _paths = make_run(store, app_paths, run_config, status=RunStatus.TRAINING_DPO)

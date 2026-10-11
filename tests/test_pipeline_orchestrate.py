@@ -503,6 +503,8 @@ def prepared(tmp_path, minimal_character, rubric, monkeypatch):
         paths=ctx.paths,
         events=ctx.bus.history,
     )
+
+
 def test_prepare_dataset_emits_verbose_generation_stages(prepared):
     logs = [event for event in prepared.events() if event.kind == "log"]
     assert logs

@@ -53,6 +53,12 @@ def test_configure_wandb_persists_and_preserves(app_paths, monkeypatch):
     monkeypatch.setattr(setup_env, "prompt_yes_no", lambda *a, **k: True)
     monkeypatch.setattr(setup_env, "prompt_secret", lambda *a, **k: "wb-key-123")
     monkeypatch.setattr(setup_env, "prompt_text", lambda label, default="", **k: "demo-project")
+    checked = []
+    monkeypatch.setattr(
+        setup_env,
+        "test_wandb_connection",
+        lambda key, project, entity: checked.append((key, project, entity)) or (True, "connected"),
+    )
 
     setup_env.configure_wandb(env)
 
@@ -62,8 +68,74 @@ def test_configure_wandb_persists_and_preserves(app_paths, monkeypatch):
     assert "WANDB_ENABLED=true" in text
     assert env.settings.wandb_enabled is True
     assert env.settings.wandb_project == "demo-project"
+    assert checked == [("wb-key-123", "demo-project", "demo-project")]
     if os.name == "posix":
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_configure_wandb_reuses_saved_key_for_connection_test(app_paths, monkeypatch):
+    env = Environment(app_paths)
+    env.secrets.update({"WANDB_API_KEY": "saved-key"})
+    monkeypatch.setattr(setup_env, "prompt_yes_no", lambda *a, **k: True)
+    monkeypatch.setattr(setup_env, "prompt_secret", lambda *a, **k: "")
+    monkeypatch.setattr(setup_env, "prompt_text", lambda label, default="", **k: "demo-project")
+    checked = []
+    monkeypatch.setattr(
+        setup_env,
+        "test_wandb_connection",
+        lambda key, project, entity: checked.append((key, project, entity)) or (True, "connected"),
+    )
+    setup_env.configure_wandb(env)
+    assert checked == [("saved-key", "demo-project", "demo-project")]
+    assert env.secrets.get("WANDB_API_KEY") == "saved-key"
+    assert env.settings.wandb_project == "demo-project"
+
+
+def test_test_wandb_connection_reports_missing_optional_dependency(monkeypatch):
+    import builtins
+
+    original_import = builtins.__import__
+
+    def import_without_wandb(name, *args, **kwargs):
+        if name == "wandb":
+            raise ImportError("missing")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_without_wandb)
+    valid, message = setup_env.test_wandb_connection("key", "project")
+    assert valid is False
+    assert "uv sync --extra tracking" in message
+
+
+def test_configure_wandb_does_not_enable_without_any_api_key(app_paths, monkeypatch):
+    env = Environment(app_paths)
+    env.settings.wandb_enabled = True
+    monkeypatch.setattr(setup_env, "prompt_yes_no", lambda *a, **k: True)
+    monkeypatch.setattr(setup_env, "prompt_secret", lambda *a, **k: "")
+    monkeypatch.setattr(setup_env, "prompt_text", lambda label, default="", **k: default)
+    setup_env.configure_wandb(env)
+    assert env.settings.wandb_enabled is False
+    assert env.secrets.get("WANDB_ENABLED") == "false"
+    assert env.secrets.get("WANDB_API_KEY") is None
+
+
+def test_test_wandb_connection_checks_project_access(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    class Api:
+        def __init__(self, *, api_key):
+            assert api_key == "key"
+            self.viewer = SimpleNamespace(username="tester")
+
+        def project(self, project, entity):
+            assert (project, entity) == ("experiment", "team")
+            return object()
+
+    monkeypatch.setitem(sys.modules, "wandb", SimpleNamespace(Api=Api))
+    valid, message = setup_env.test_wandb_connection("key", "experiment", "team")
+    assert valid is True
+    assert "tester" in message
 
 
 def test_configure_weave_requires_explicit_consent(app_paths, monkeypatch):

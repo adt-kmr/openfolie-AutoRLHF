@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from autorlhf.core.events import EventBus
 from autorlhf.llm.schemas import (
     ComparisonReport,
     CriterionScore,
@@ -77,6 +78,7 @@ def test_evaluate_model_aggregates_scored_responses_only(monkeypatch, rubric):
         lambda handle, p, **kwargs: responses[p.prompt_id],
     )
     jev = StubJev([judgement("p1", "base", score=4.0)])
+    bus = EventBus()
     report = evaluate_model(
         handle=handle(),
         prompts=prompts,
@@ -87,6 +89,7 @@ def test_evaluate_model_aggregates_scored_responses_only(monkeypatch, rubric):
         variant="base",
         judge_model="typesafe/jev-1.13",
         min_responses_for_claims=1,
+        bus=bus,
     )
     assert report.scored_responses == 1
     assert report.failed_judgements == 1
@@ -97,6 +100,15 @@ def test_evaluate_model_aggregates_scored_responses_only(monkeypatch, rubric):
     assert report.eval_prompts_hash == "hash"
     assert "note" in report.warnings
     assert jev.calls == 1  # the failed generation was never judged
+    events = bus.history()
+    assert any(event.verbose_only and "API request POST" in event.message for event in events)
+    sample = next(event for event in events if event.kind == "sample")
+    assert sample.data["prompt"] == "question p1"
+    assert sample.data["response"] == "answer one"
+    assert sample.data["judgement"]["overall"] == 4.0
+    assert any(
+        event.kind == "progress" and "evaluating base: 1/2" == event.message for event in events
+    )
 
 
 def test_evaluate_model_marks_low_coverage_inconclusive(monkeypatch, rubric):

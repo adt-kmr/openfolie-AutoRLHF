@@ -66,6 +66,10 @@ Secrets live in `~/.local/share/autorlhf/config.env` (or `$AUTORLHF_HOME/config.
 A project-local `.env` is read as a lowest-precedence fallback but never written;
 `.env` is gitignored. Real environment variables always win. See `.env.example`.
 
+When W&B is enabled in setup, enter the API key and project; setup can test the
+credentials/project immediately and reports a safe success or remediation message.
+To install the optional client first, run `uv sync --extra tracking`.
+
 ## Commands
 
 ```bash
@@ -110,7 +114,10 @@ Runs are resumable from their last complete checkpoint — resuming reloads the 
 `config.json` so a run can never silently change its model, prompt, or data.
 
 Inspect a run with `--list-runs` and `--export`, or open the dashboard (`autorlhf`) and
-browse its phases, metrics, samples, and full `history.jsonl`.
+browse its phases, metrics, samples, and full `history.jsonl`. In the live run screen, enable
+Verbose (or press `v`) to stream per-prompt evaluation, generation/judgement details,
+and OpenRouter API request/response activity into the Activity widget. These verbose events
+are also retained in the run history.
 
 ## Base vs fine-tuned evaluation
 

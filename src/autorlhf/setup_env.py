@@ -90,8 +90,34 @@ def _validate_openrouter(key: str) -> tuple[bool, str]:
                 pass
 
 
+def test_wandb_connection(api_key: str, project: str, entity: str = "") -> tuple[bool, str]:
+    """Verify W&B credentials and confirm the configured project is reachable."""
+
+    try:
+        import wandb
+    except ImportError:
+        return False, "The 'wandb' package is not installed. Install with: uv sync --extra tracking"
+    try:
+        api = wandb.Api(api_key=api_key)
+        viewer = api.viewer
+        if viewer is None:
+            return False, "W&B did not return an authenticated user. Check the API key."
+        owner = entity or getattr(viewer, "username", "")
+        if not owner or api.project(project, owner) is None:
+            return (
+                False,
+                f"Project '{owner or 'current user'}/{project}' is not accessible to this account.",
+            )
+    except Exception:
+        return (
+            False,
+            "W&B connection failed. Check the API key, network, entity, and project access.",
+        )
+    return True, f"Connected to W&B as {getattr(viewer, 'username', 'authenticated user')}"
+
+
 def configure_wandb(env: Environment) -> None:
-    """Prompt for W&B settings and persist them.  Preserves unrelated secrets."""
+    """Prompt for W&B settings, test connectivity, and persist them."""
 
     enabled = prompt_yes_no(
         "Log training metrics to Weights & Biases?", default=env.settings.wandb_enabled
@@ -105,12 +131,30 @@ def configure_wandb(env: Environment) -> None:
 
     api_key = prompt_secret(
         "W&B API key (hidden; Enter to keep the existing key): ", allow_empty=True
-    )
-    if api_key:
-        env.secrets.update({"WANDB_API_KEY": api_key})
+    ) or env.secrets.get("WANDB_API_KEY", "")
+    if not api_key:
+        env.settings.wandb_enabled = False
+        env.secrets.update({"WANDB_ENABLED": "false"})
+        env.save_settings()
+        print("W&B was not enabled: an API key is required. Re-run setup after obtaining a key.")
+        return
     project = prompt_text("W&B project name: ", default=env.settings.wandb_project or "autorlhf")
-    entity = prompt_text("W&B entity/team (optional): ")
-    env.secrets.update({"WANDB_ENABLED": "true", "WANDB_PROJECT": project, "WANDB_ENTITY": entity})
+    entity = prompt_text(
+        "W&B entity/team (optional): ", default=env.secrets.get("WANDB_ENTITY", "")
+    )
+    if prompt_yes_no("Test W&B connection now?", default=True):
+        valid, message = test_wandb_connection(api_key, project, entity)
+        print(message)
+        if not valid:
+            print("Credentials and project settings were saved so you can correct them and retry.")
+    env.secrets.update(
+        {
+            "WANDB_API_KEY": api_key,
+            "WANDB_ENABLED": "true",
+            "WANDB_PROJECT": project,
+            "WANDB_ENTITY": entity,
+        }
+    )
     env.settings.wandb_enabled = True
     env.settings.wandb_project = project
     env.save_settings()

@@ -216,6 +216,7 @@ class TrainingScreen(AutorlhfScreen):
             self._log("training-log", event.message, verbose_only=event.verbose_only)
         elif kind == "counters":
             self._schedule_state_refresh()
+
     async def _on_metric(self, event) -> None:
         name = str(event.data.get("name_key") or event.data.get("name") or event.message)
         value = event.data.get("value")
@@ -242,6 +243,8 @@ class TrainingScreen(AutorlhfScreen):
         self._schedule_state_refresh()
 
     def _on_progress(self, event) -> None:
+        if event.message:
+            self._log("training-log", event.message, verbose_only=event.verbose_only)
         if event.step is not None:
             self.last_step = int(event.step)
             self._set_tile("step", str(event.step))
@@ -269,6 +272,7 @@ class TrainingScreen(AutorlhfScreen):
                 self.finished = True
         self._log("training-log", f"status: {event.message}")
         self._schedule_state_refresh()
+
     def _on_sample(self, event) -> None:
         item = event.data.get("review_item")
         prompt = event.data.get("prompt") or event.message
@@ -285,7 +289,7 @@ class TrainingScreen(AutorlhfScreen):
         if judgement:
             self._log(
                 "training-samples",
-                f"judgement: overall={judgement.get('overall')}",
+                f"judgement: {judgement}",
                 verbose_only=True,
             )
 
