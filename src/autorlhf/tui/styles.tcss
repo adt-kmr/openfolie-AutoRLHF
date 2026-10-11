@@ -1,0 +1,225 @@
+/* autorlhf TUI stylesheet.  Deliberately plain: information density over chrome. */
+
+Screen {
+    layout: vertical;
+}
+
+Header {
+    dock: top;
+}
+
+Footer {
+    dock: bottom;
+}
+
+.screen-title,
+#dashboard-title,
+#setup-title,
+#review-title,
+#training-title,
+#evaluation-title,
+#dataset-title,
+#settings-title {
+    text-style: bold;
+    padding: 0 1;
+    background: $panel;
+}
+
+.form,
+#review-detail,
+#dataset-editor,
+#settings-body,
+#training-config-body {
+    padding: 0 1;
+}
+
+.form-heading {
+    text-style: bold;
+    padding-top: 1;
+}
+
+.note {
+    color: $text-muted;
+}
+
+.meta {
+    color: $text-muted;
+}
+
+.problems {
+    color: $warning;
+}
+
+.field-label {
+    width: 32;
+}
+
+.row {
+    height: auto;
+}
+
+.col {
+    width: auto;
+    height: auto;
+}
+
+.col.grow {
+    width: 1fr;
+}
+
+/* --- metric tiles ------------------------------------------------------- */
+
+.metric-tile {
+    border: round $primary;
+    padding: 0 1;
+    margin: 0 1 0 0;
+    width: 1fr;
+    height: auto;
+}
+
+#training-tiles {
+    height: auto;
+}
+
+/* --- dashboard ---------------------------------------------------------- */
+
+#dashboard-body {
+    height: 1fr;
+}
+
+#runs-panel {
+    width: 2fr;
+}
+
+#incomplete-panel {
+    width: 1fr;
+}
+
+#runs-table,
+#preset-table,
+#hp-table,
+#dataset-table,
+#eval-criteria {
+    height: 1fr;
+    min-height: 6;
+}
+
+#run-detail {
+    border: round $panel;
+    padding: 0 1;
+    height: 1fr;
+    overflow-y: auto;
+}
+
+/* --- forms and panels --------------------------------------------------- */
+
+#rubric-body,
+#training-config-body,
+#review-body,
+#dataset-body,
+#evaluation-body,
+#training-body {
+    height: 1fr;
+}
+
+#rubric-body > .col,
+#review-queue,
+#dataset-side,
+#evaluation-examples,
+#training-state {
+    width: 1fr;
+    border: round $panel;
+}
+
+#training-left,
+#training-right,
+#review-detail,
+#dataset-editor,
+#evaluation-main,
+#training-events {
+    width: 1fr;
+    border: round $panel;
+    overflow-y: auto;
+}
+
+#training-samples {
+    height: 12;
+}
+
+#training-warnings {
+    height: 8;
+}
+
+#training-log {
+    height: 10;
+}
+
+#training-progress {
+    padding: 0 1;
+}
+
+#training-controls,
+#confirm-buttons,
+#settings-buttons,
+#settings-tracking-buttons,
+#setup-actions,
+#incomplete-buttons,
+#setup-credential-buttons {
+    height: auto;
+    padding: 0 1;
+}
+
+/* --- review ------------------------------------------------------------- */
+
+#review-score-inputs {
+    height: auto;
+}
+
+#review-items,
+#char-seeds,
+#char-constraints,
+#rubric-criteria,
+#incomplete-list,
+#eval-example-list {
+    border: round $panel;
+    min-height: 4;
+}
+
+#review-items,
+#eval-example-list,
+#incomplete-list {
+    height: 1fr;
+}
+
+#rubric-criteria,
+#char-seeds,
+#char-constraints {
+    height: 8;
+}
+
+/* --- modals ------------------------------------------------------------- */
+
+ConfirmModal,
+NoticeModal {
+    align: center middle;
+}
+
+#confirm-modal,
+#notice-modal {
+    width: 70;
+    height: auto;
+    border: round $warning;
+    background: $surface;
+    padding: 1 2;
+}
+
+#confirm-title,
+#notice-title {
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#notice-message,
+#confirm-message {
+    padding-bottom: 1;
+}

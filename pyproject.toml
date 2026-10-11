@@ -1,0 +1,63 @@
+[project]
+name = "autorlhf"
+version = "0.1.0"
+description = "Local-first terminal workbench for Jev-guided synthetic data generation and HF model fine-tuning (SFT/DPO)."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "autorlhf" }]
+
+dependencies = [
+    "textual>=1.0",
+    "rich>=13.7",
+    "pydantic>=2.9",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+    "openrouter>=1.3.43",
+    "platformdirs>=4.2",
+    "datasets>=2.20",
+    "transformers>=4.46",
+    "trl>=0.12",
+    "peft>=0.13",
+    "accelerate>=1.0",
+]
+
+[project.optional-dependencies]
+# CUDA-only quantized fine-tuning. Gated at runtime by hardware preflight.
+qlora = ["bitsandbytes>=0.44"]
+# Optional experiment tracking. Both are independently toggleable.
+tracking = ["wandb>=0.18", "weave>=0.51"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "ruff>=0.7", "mypy>=1.13"]
+
+[project.scripts]
+autorlhf = "autorlhf.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/autorlhf"]
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"
+markers = ["slow: end-to-end training smoke tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+check_untyped_defs = true

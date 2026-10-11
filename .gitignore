@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# secrets — never commit
+.env
+.env.local
+config.env
+*.secret
+
+# local artifacts / experiments
+runs/
+artifacts/
+outputs/
+wandb/
+*.db
+*.sqlite3
+checkpoints/
+adapter/
+
+# editor / os
+.idea/
+.vscode/
+.DS_Store
