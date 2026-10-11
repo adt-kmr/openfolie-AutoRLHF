@@ -495,8 +495,26 @@ def prepared(tmp_path, minimal_character, rubric, monkeypatch):
     runner = PipelineRunner(ctx)
     bundle = runner.prepare_dataset()
     return SimpleNamespace(
-        ctx=ctx, runner=runner, bundle=bundle, stub=stub, calls=calls, paths=ctx.paths
+        ctx=ctx,
+        runner=runner,
+        bundle=bundle,
+        stub=stub,
+        calls=calls,
+        paths=ctx.paths,
+        events=ctx.bus.history,
     )
+def test_prepare_dataset_emits_verbose_generation_stages(prepared):
+    logs = [event for event in prepared.events() if event.kind == "log"]
+    assert logs
+    assert all(event.verbose_only for event in logs)
+    messages = [event.message for event in logs]
+    assert any("dataset generation started" in message for message in messages)
+    assert any("prompt generation complete: 10 prompts" in message for message in messages)
+    assert any("prompt splits assigned" in message for message in messages)
+    assert any("candidate generation complete: 20 candidates" in message for message in messages)
+    assert any("candidate judging complete: 20 judgements" in message for message in messages)
+    assert any("dataset records written: 20 candidates" in message for message in messages)
+    assert any("supervised fine-tuning records written" in message for message in messages)
 
 
 def test_prepare_dataset_writes_every_artifact(prepared):

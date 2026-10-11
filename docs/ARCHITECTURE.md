@@ -271,6 +271,10 @@ def main(argv: list[str] | None = None) -> int
 The TUI worker thread drives: `prepare_dataset → run_review → run_baseline_eval →
 TrainingJob.run() → run_final_eval`, reacting to UI pause/stop by setting
 `ctx.pause_event` / `ctx.cancel_event` (and forwarding to the live `TrainingJob`).
+Bus events are enqueued onto the Textual loop asynchronously; metric tiles update
+immediately, while state-panel reads are coalesced and run in a background thread.
+The elapsed timer runs on its own thread and schedules display updates on the Textual
+loop. Widget mutation remains on the Textual loop.
 
 ## Non-negotiables
 

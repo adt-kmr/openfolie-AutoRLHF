@@ -321,6 +321,7 @@ def generate_prompts(
                     run_id=run_id,
                     phase="generate",
                     fraction=min(1.0, len(collected) / max(1, target)),
+                    verbose_only=True,
                     category=category,
                 )
         if got < wanted:

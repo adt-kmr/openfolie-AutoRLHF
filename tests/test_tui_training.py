@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import threading
+import time
+
 from test_tui_support import make_app, make_run, running, static_text
 from textual.widgets import DataTable, ProgressBar
 
@@ -91,7 +94,8 @@ async def test_training_screen_renders_an_event_stream(app_paths, store, bus, ru
             response="Not before the afternoon tide.",
         )
         await pilot.pause()
-
+        await app._event_queue.join()
+        await pilot.pause(0.5)
         assert screen.query_one("#tile-step", MetricTile).value == "3"
         assert screen.query_one("#tile-loss", MetricTile).value == "0.420"
         assert screen.query_one("#tile-eval_loss", MetricTile).value == "0.510"
@@ -118,6 +122,83 @@ async def test_training_screen_renders_an_event_stream(app_paths, store, bus, ru
         await pilot.pause()
         assert "It turns at dusk." in screen.query_one("#training-samples", LogPane).text()
 
+
+async def test_metric_burst_batches_state_panel_refreshes(app_paths, store, bus, run_config):
+    run_id, _paths = make_run(store, app_paths, run_config, status=RunStatus.TRAINING_DPO)
+    app = make_app(app_paths, store=store, bus=bus, config=run_config)
+    assert app.adopt_run(run_id) is True
+
+    async with running(app) as pilot:
+        await pilot.pause()
+        app.push_screen("training")
+        await pilot.pause()
+        screen = app.screen
+        original_render = screen._render_kv
+        refresh_count = 0
+
+        async def count_refreshes():
+            nonlocal refresh_count
+            refresh_count += 1
+            await original_render()
+
+        screen._render_kv = count_refreshes
+        for step in range(100):
+            bus.emit(
+                "metric", "loss", run_id=run_id, name_key="loss", value=step / 1000, step=step
+            )
+        await pilot.pause(0.1)
+        await app._event_queue.join()
+        await pilot.pause(0.1)
+
+        assert screen.query_one("#tile-step", MetricTile).value == "99"
+        assert screen.query_one("#tile-loss", MetricTile).value == "0.099"
+        assert 0 < refresh_count < 10
+
+
+async def test_activity_logs_are_dispatched_asynchronously(app_paths, store, bus, run_config):
+    run_id, _paths = make_run(store, app_paths, run_config, status=RunStatus.TRAINING_DPO)
+    app = make_app(app_paths, store=store, bus=bus, config=run_config)
+    assert app.adopt_run(run_id) is True
+
+    async with running(app) as pilot:
+        await pilot.pause()
+        app.push_screen("training")
+        await pilot.pause()
+        screen = app.screen
+        pane = screen.query_one("#training-log", LogPane)
+
+        for index in range(50):
+            bus.emit("log", f"queued activity entry {index:02}", run_id=run_id)
+        assert "queued activity entry 00" not in pane.text()
+        await pilot.pause()
+        activity = pane.text()
+        positions = [activity.index(f"queued activity entry {index:02}") for index in range(50)]
+        assert positions == sorted(positions)
+
+
+async def test_elapsed_timer_ticks_while_worker_blocks(app_paths, store, bus, run_config):
+    run_id, _paths = make_run(store, app_paths, run_config, status=RunStatus.TRAINING_DPO)
+    app = make_app(app_paths, store=store, bus=bus, config=run_config)
+    assert app.adopt_run(run_id) is True
+
+    async with running(app) as pilot:
+        await pilot.pause()
+        app.push_screen("training")
+        await pilot.pause()
+        screen = app.screen
+        screen.started_at = time.time() - 5
+
+        blocker = threading.Event()
+        worker = threading.Thread(target=blocker.wait)
+        worker.start()
+        try:
+            await pilot.pause(1.2)
+            elapsed = screen.query_one("#tile-elapsed", MetricTile).value
+            assert elapsed != "-"
+            assert elapsed != "00:05"
+        finally:
+            blocker.set()
+            worker.join(timeout=1)
 
 async def test_training_screen_replays_history_on_mount(app_paths, store, bus, run_config):
     run_id, _paths = make_run(store, app_paths, run_config, status=RunStatus.TRAINING_DPO)

@@ -8,6 +8,7 @@ network or a GPU.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import threading
 from collections.abc import Callable
@@ -83,6 +84,9 @@ class AutorlhfApp(App[None]):
         self.worker: PipelineWorker | None = None
         self._worker_thread: threading.Thread | None = None
         self._unsubscribe: Callable[[], None] | None = None
+        self._event_queue: asyncio.Queue[tuple[Callable[[Event], Any] | None, Event]] | None = None
+        self._event_consumer: asyncio.Task[None] | None = None
+        self._event_loop: asyncio.AbstractEventLoop | None = None
         self._exit_when_idle = False
         #: True once the first-run wizard has been presented, so the dashboard
         #: never bounces the user back into it repeatedly.
@@ -98,10 +102,16 @@ class AutorlhfApp(App[None]):
 
         configure_logging(verbose=self.state.verbose)
         self.title = self.TITLE
+        self._event_loop = asyncio.get_running_loop()
+        self._event_queue = asyncio.Queue()
+        self._event_consumer = asyncio.create_task(self._consume_events())
         self._subscribe_bus()
 
     def on_unmount(self) -> None:
         self._unsubscribe_bus()
+        if self._event_consumer is not None:
+            self._event_consumer.cancel()
+
 
     # -- bus plumbing ------------------------------------------------------ #
 
@@ -115,32 +125,55 @@ class AutorlhfApp(App[None]):
             self._unsubscribe = None
 
     def _on_bus_event(self, event: Event) -> None:
-        """Bus listener; safe to call from any thread."""
+        """Schedule event handling without waiting for UI rendering."""
 
-        if threading.current_thread() is threading.main_thread():
-            self._handle_event(event)
+        loop = self._event_loop
+        if loop is None or loop.is_closed():
             return
-        try:
-            self.call_from_thread(self._handle_event, event)
-        except Exception as exc:  # noqa: BLE001 - a dropped UI update must not kill the run
-            self.log(f"could not dispatch event {event.kind}: {exc}")
+        loop.call_soon_threadsafe(self._queue_event, None, event)
 
-    def _handle_event(self, event: Event) -> None:
+    def _queue_event(self, handler: Callable[[Event], Any] | None, event: Event) -> None:
+        if self._event_queue is not None:
+            self._event_queue.put_nowait((handler, event))
+
+    async def _consume_events(self) -> None:
+        queue = self._event_queue
+        if queue is None:
+            return
+        while True:
+            handler, event = await queue.get()
+            try:
+                if handler is None:
+                    await self._handle_event(event)
+                else:
+                    result = handler(event)
+                    if asyncio.iscoroutine(result):
+                        await result
+            except Exception as exc:  # noqa: BLE001 - one bad update must not stop dispatch
+                self.log(f"could not dispatch event {event.kind}: {exc}")
+            finally:
+                queue.task_done()
+            await asyncio.sleep(0)
+
+    async def _handle_event(self, event: Event) -> None:
         current = self.screen
         handler = getattr(current, "handle_event", None)
         if callable(handler):
-            handler(event)
+            result = handler(event)
+            if asyncio.iscoroutine(result):
+                await result
         if event.kind == "phase" and event.phase:
             self.sub_title = f"{event.phase} - {self.state.run_id or ''}".strip(" -")
 
-    def replay_events(self, handler: Callable[[Event], None]) -> int:
-        """Feed every event seen so far to ``handler`` (used on screen mount)."""
+    def replay_events(self, handler: Callable[[Event], Any]) -> int:
+        """Queue the current history for asynchronous handling on the UI loop."""
 
         events = self.bus.history()
-        for event in events:
-            handler(event)
+        loop = self._event_loop
+        if loop is not None and not loop.is_closed():
+            for event in events:
+                loop.call_soon_threadsafe(self._queue_event, handler, event)
         return len(events)
-
     # -- run identity ------------------------------------------------------ #
 
     def adopt_run(self, run_id: str) -> bool:

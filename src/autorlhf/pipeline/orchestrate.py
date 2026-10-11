@@ -279,6 +279,14 @@ class PipelineRunner:
         self.ctx.set_status(RunStatus.PREPARING_DATA)
         self.ctx.emit("phase", "preparing dataset", phase="data")
 
+        self.ctx.emit(
+            "log",
+            f"dataset generation started: target={self.config.generation.num_prompts} prompts, "
+            f"{self.config.generation.candidates_per_prompt} candidates per prompt, resume={resume}",
+            phase="data",
+            verbose_only=True,
+        )
+
         existing = load_dataset(self.paths) if resume else None
         prompts = list(existing.prompts) if existing is not None else []
         if prompts:
@@ -294,12 +302,15 @@ class PipelineRunner:
                 cancel_event=self.ctx.cancel_event,
                 pause_event=self.ctx.pause_event,
             )
+        self.ctx.emit(
+            "log", f"prompt generation complete: {len(prompts)} prompts",
+            phase="data", verbose_only=True,
+        )
         if not prompts:
             raise InsufficientDataError(
                 "no synthetic prompts could be generated",
                 hint="Check the teacher model id and the OpenRouter credential, then retry.",
             )
-
         dataset_hash = self.config.dataset_fingerprint()
         assignment = load_or_plan(
             self.paths,
@@ -309,6 +320,13 @@ class PipelineRunner:
             run_id=self.ctx.run_id,
         )
         apply_splits(prompts, assignment)
+        self.ctx.emit(
+            "log",
+            f"prompt splits assigned: train={len(assignment.prompt_ids(SplitName.TRAIN))}, "
+            f"validation={len(assignment.prompt_ids(SplitName.VALIDATION))}, "
+            f"eval={len(assignment.prompt_ids(SplitName.EVAL))}",
+            phase="data", verbose_only=True,
+        )
 
         eval_prompts = build_eval_prompts(
             prompts,
@@ -324,6 +342,10 @@ class PipelineRunner:
                     "one prompt is held out."
                 ),
             )
+        self.ctx.emit(
+            "log", f"held-out eval prompts prepared: {len(eval_prompts)}",
+            phase="data", verbose_only=True,
+        )
         rewrite_records(
             self.paths.eval_prompts_path,
             [eval_prompt_record(run_id=self.ctx.run_id, prompt=p) for p in eval_prompts],
@@ -353,8 +375,17 @@ class PipelineRunner:
             )
         finally:
             generator.close()
-
+        self.ctx.emit(
+            "log", f"candidate generation complete: {len(candidates)} candidates",
+            phase="generate", verbose_only=True,
+        )
         judgements, new_judgement_records = self._judge_candidates(prompts, candidates, existing)
+        self.ctx.emit(
+            "log",
+            f"candidate judging complete: {len(judgements)} judgements, "
+            f"{len(new_judgement_records)} newly scored",
+            phase="generate", verbose_only=True,
+        )
         self._append_new_judgements(self.paths.judgments_path, new_judgement_records)
         self._apply_judgement_status(candidates, judgements)
 
@@ -370,6 +401,10 @@ class PipelineRunner:
             if candidate.prompt_id in prompts_by_id
         ]
         rewrite_records(self.paths.dataset_path, records)
+        self.ctx.emit(
+            "log", f"dataset records written: {len(records)} candidates",
+            phase="data", verbose_only=True,
+        )
         self.ctx.emit(
             "artifact",
             f"dataset.jsonl ({len(records)} records)",
@@ -392,7 +427,10 @@ class PipelineRunner:
             decisions=decisions,
         )
         rewrite_records(self.paths.sft_path, sft_records)
-
+        self.ctx.emit(
+            "log", f"supervised fine-tuning records written: {len(sft_records)}",
+            phase="data", verbose_only=True,
+        )
         counters = compute_counters(
             prompts=prompts,
             candidates=candidates,

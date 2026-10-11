@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import threading
 import time
 from typing import Any
 
@@ -44,6 +46,11 @@ class TrainingScreen(AutorlhfScreen):
         self.finished = False
         self.last_step = 0
         self._tiles: dict[str, MetricTile] = {}
+        self._elapsed_stop = threading.Event()
+        self._elapsed_thread: threading.Thread | None = None
+        self._ui_loop: asyncio.AbstractEventLoop | None = None
+        self._state_refresh_task: asyncio.Task[None] | None = None
+        self._state_refresh_requested = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -73,13 +80,49 @@ class TrainingScreen(AutorlhfScreen):
                 yield LogPane(id="training-log", max_lines=600, markup=False)
         yield Footer()
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
+        self._ui_loop = asyncio.get_running_loop()
         self.verbose = self.state.verbose
         self.query_one("#training-verbose", Checkbox).value = self.verbose
-        self._render_kv()
+        await self._render_kv()
+        self._elapsed_stop.clear()
+        self._elapsed_thread = threading.Thread(
+            target=self._elapsed_loop, name="training-elapsed-timer", daemon=True
+        )
+        self._elapsed_thread.start()
         self.autorlhf.replay_events(self.handle_event)
 
-    # -- helpers ----------------------------------------------------------- #
+    def on_unmount(self) -> None:
+        self._elapsed_stop.set()
+        if self._state_refresh_task is not None:
+            self._state_refresh_task.cancel()
+
+    def _schedule_state_refresh(self) -> None:
+        self._state_refresh_requested = True
+        if self._state_refresh_task is None or self._state_refresh_task.done():
+            self._state_refresh_task = asyncio.create_task(self._refresh_state_later())
+
+    async def _refresh_state_later(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(0.05)
+                self._state_refresh_requested = False
+                await self._render_kv()
+                if not self._state_refresh_requested:
+                    return
+        finally:
+            self._state_refresh_task = None
+
+    def _elapsed_loop(self) -> None:
+        while not self._elapsed_stop.wait(1.0):
+            loop = self._ui_loop
+            if loop is None or loop.is_closed():
+                return
+            loop.call_soon_threadsafe(self._tick_elapsed)
+
+    def _tick_elapsed(self) -> None:
+        if self.started_at is not None and not self.finished:
+            self._update_elapsed(time.time())
 
     @property
     def _tile_map(self) -> dict[str, MetricTile]:
@@ -102,7 +145,7 @@ class TrainingScreen(AutorlhfScreen):
             message, level=level, verbose_only=verbose_only
         )
 
-    def _render_kv(self) -> None:
+    async def _render_kv(self) -> None:
         state = self.state
         worker = self.autorlhf.worker
         rows: list[tuple[str, Any]] = [
@@ -111,58 +154,54 @@ class TrainingScreen(AutorlhfScreen):
             ("interactive", str(state.interactive)),
             ("verbose", str(self.verbose)),
         ]
-        if state.run_id:
-            try:
-                counters = state.store.counters(state.run_id)
-                if counters:
-                    rows.append(("counters", counters))
-                record = state.store.get_run(state.run_id)
-                if record is not None:
-                    rows.append(("status", record.status.value))
-                    rows.append(("step", str(record.step)))
-                    rows.append(("last checkpoint", record.last_checkpoint or "-"))
-            except Exception as exc:  # noqa: BLE001 - state panel is advisory
-                rows.append(("state error", str(exc)))
+        state_rows, checkpoint_text = await asyncio.to_thread(self._load_run_details)
+        rows.extend(state_rows)
         if worker is not None:
             rows.append(("calls", ", ".join(worker.calls) or "-"))
             rows.append(("paused", str(worker.paused)))
         self.query_one("#training-kv", KeyValuePanel).set_rows(rows)
-        self._render_checkpoints()
+        self.query_one("#training-checkpoints", Static).update(checkpoint_text)
 
-    def _render_checkpoints(self) -> None:
-        target = self.query_one("#training-checkpoints", Static)
+    def _load_run_details(self) -> tuple[list[tuple[str, Any]], str]:
         if not self.state.run_id:
-            target.update("-")
-            return
+            return [], "-"
+        rows: list[tuple[str, Any]] = []
         try:
+            counters = self.state.store.counters(self.state.run_id)
+            if counters:
+                rows.append(("counters", counters))
+            record = self.state.store.get_run(self.state.run_id)
+            if record is not None:
+                rows.append(("status", record.status.value))
+                rows.append(("step", str(record.step)))
+                rows.append(("last checkpoint", record.last_checkpoint or "-"))
             checkpoints = self.state.store.list_checkpoints(self.state.run_id)
-        except Exception as exc:  # noqa: BLE001
-            target.update(f"could not list checkpoints: {exc}")
-            return
+        except Exception as exc:  # noqa: BLE001 - state panel is advisory
+            rows.append(("state error", str(exc)))
+            return rows, f"could not load run state: {exc}"
         if not checkpoints:
-            target.update("None saved yet.")
-            return
-        target.update(
-            "\n".join(
-                f"{item['path']} step={item['step']} {'complete' if item['complete'] else 'incomplete'}"
-                for item in checkpoints[:5]
-            )
+            return rows, "None saved yet."
+        text = "\n".join(
+            f"{item['path']} step={item['step']} {'complete' if item['complete'] else 'incomplete'}"
+            for item in checkpoints[:5]
         )
+        return rows, text
 
     # -- events ------------------------------------------------------------ #
 
-    def handle_event(self, event) -> None:
+    async def handle_event(self, event) -> None:
+        await asyncio.sleep(0)
         if self.started_at is None:
             self.started_at = event.ts
         kind = event.kind
         if kind == "metric":
-            self._on_metric(event)
+            await self._on_metric(event)
         elif kind == "progress":
             self._on_progress(event)
         elif kind == "phase":
-            self._on_phase(event)
+            await self._on_phase(event)
         elif kind == "status":
-            self._on_status(event)
+            await self._on_status(event)
         elif kind == "sample":
             self._on_sample(event)
         elif kind in {"warning", "error"}:
@@ -176,14 +215,13 @@ class TrainingScreen(AutorlhfScreen):
         elif kind == "log":
             self._log("training-log", event.message, verbose_only=event.verbose_only)
         elif kind == "counters":
-            self._render_kv()
-
-    def _on_metric(self, event) -> None:
+            self._schedule_state_refresh()
+    async def _on_metric(self, event) -> None:
         name = str(event.data.get("name_key") or event.data.get("name") or event.message)
         value = event.data.get("value")
         if value is None:
             value = event.data.get(name)
-        step = event.data.get("step")
+        step = event.data.get("step", event.step)
         if step is not None:
             self._set_tile("step", str(step))
         if name in {"loss", "train_loss"}:
@@ -201,7 +239,7 @@ class TrainingScreen(AutorlhfScreen):
         else:
             self._log("training-log", f"{name}: {value}")
         self._update_elapsed(event.ts)
-        self._render_kv()
+        self._schedule_state_refresh()
 
     def _on_progress(self, event) -> None:
         if event.step is not None:
@@ -214,24 +252,23 @@ class TrainingScreen(AutorlhfScreen):
             )
             self._set_tile("throughput", pct(max(0.0, min(1.0, fraction))))
         if event.message:
-            self._log("training-log", event.message)
+            self._log("training-log", event.message, verbose_only=event.verbose_only)
         self._update_elapsed(event.ts)
 
-    def _on_phase(self, event) -> None:
+    async def _on_phase(self, event) -> None:
         phase = event.phase or event.data.get("phase") or event.message
         self._set_tile("phase", str(phase))
         self._log("training-log", event.message or f"phase: {phase}")
-        self._render_kv()
+        self._schedule_state_refresh()
 
-    def _on_status(self, event) -> None:
+    async def _on_status(self, event) -> None:
         status = event.data.get("status")
         if status:
             self._set_tile("phase", str(status))
             if status in {"completed", "failed", "cancelled", "interrupted"}:
                 self.finished = True
         self._log("training-log", f"status: {event.message}")
-        self._render_kv()
-
+        self._schedule_state_refresh()
     def _on_sample(self, event) -> None:
         item = event.data.get("review_item")
         prompt = event.data.get("prompt") or event.message
