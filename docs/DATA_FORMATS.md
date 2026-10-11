@@ -19,7 +19,7 @@ All records carry `run_id`, a `dataset_version` string, and `created_at`
   "split": "train",
   "category": "ordinary",
   "prompt": "Will the fog lift today?",
-  "prompt_context": [{"role": "user", "content": "..."}],
+  "prompt_context": [{ "role": "user", "content": "..." }],
   "response": "Not before the afternoon tide...",
   "source": "teacher",
   "model_id": "openai/gpt-4o-mini",
@@ -34,8 +34,8 @@ All records carry `run_id`, a `dataset_version` string, and `created_at`
   "edits": [],
   "edited": false,
   "overall": 3.66,
-  "criterion_scores": {"character_consistency": 4.0, "voice_style": 3.5},
-  "judgement": {"...": "the full Judgement model_dump(mode='json')"},
+  "criterion_scores": { "character_consistency": 4.0, "voice_style": 3.5 },
+  "judgement": { "...": "the full Judgement model_dump(mode='json')" },
   "reviewer": "",
   "created_at": "2026-01-01T12:00:00"
 }
@@ -68,14 +68,17 @@ All records carry `run_id`, a `dataset_version` string, and `created_at`
   "judge_confidence": 0.81,
   "source": "jev",
   "decision": "b",
-  "probabilities": {"a": 0.19, "b": 0.81},
-  "criterion_deltas": {"character_consistency": 1.0},
+  "probabilities": { "a": 0.19, "b": 0.81 },
+  "criterion_deltas": { "character_consistency": 1.0 },
   "audit": {
-    "thresholds": {"tie_epsilon": 0.35, "min_confidence": 0.6},
-    "reasons": ["overall margin 0.90 > tie_epsilon 0.35", "judge confidence 0.81 >= 0.60"],
+    "thresholds": { "tie_epsilon": 0.35, "min_confidence": 0.6 },
+    "reasons": [
+      "overall margin 0.90 > tie_epsilon 0.35",
+      "judge confidence 0.81 >= 0.60"
+    ],
     "rejected_pairs": []
   },
-  "pair_decision": {"...": "the full PairDecision model_dump(mode='json')"},
+  "pair_decision": { "...": "the full PairDecision model_dump(mode='json')" },
   "reviewer": "",
   "created_at": "..."
 }
@@ -98,9 +101,9 @@ All records carry `run_id`, a `dataset_version` string, and `created_at`
   "prompt_id": "seed-1",
   "split": "train",
   "messages": [
-    {"role": "system", "content": "You are Aria..."},
-    {"role": "user", "content": "Will the fog lift today?"},
-    {"role": "assistant", "content": "Not before the afternoon tide..."}
+    { "role": "system", "content": "You are Aria..." },
+    { "role": "user", "content": "Will the fog lift today?" },
+    { "role": "assistant", "content": "Not before the afternoon tide..." }
   ],
   "source": "seed",
   "status": "accepted",
@@ -146,12 +149,13 @@ reports so the base and fine-tuned evaluations provably used the same prompts.
   "cached": false,
   "error": null,
   "retries": 0,
-  "usage": {"input_tokens": 476, "cost": 0.00002},
+  "usage": { "input_tokens": 476, "cost": 0.00002 },
   "human_override": null,
   "created_at": "...",
-  "judgement": {"...": "full Judgement JSON"}
+  "judgement": { "...": "full Judgement JSON" }
 }
 ```
+
 `kind` is `score` | `choice` | `noul`. Pairwise comparisons are written with
 `"kind": "choice"` and the `PairDecision` JSON under `"pair_decision"` instead of
 `"judgement"`.
@@ -178,9 +182,9 @@ events are persisted even when the UI hides them.
   "dataset_hash": "the dataset_fingerprint this split belongs to",
   "split_hash": "sha256 of the assignment below",
   "seed": 0,
-  "fractions": {"eval": 0.2, "validation": 0.15},
-  "counts": {"train": 12, "validation": 4, "eval": 5},
-  "assignments": {"p0001": "train", "p0002": "eval"},
+  "fractions": { "eval": 0.2, "validation": 0.15 },
+  "counts": { "train": 12, "validation": 4, "eval": 5 },
+  "assignments": { "p0001": "train", "p0002": "eval" },
   "created_at": "..."
 }
 ```

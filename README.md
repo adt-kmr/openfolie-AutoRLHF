@@ -11,14 +11,14 @@ judgements) and, if you explicitly enable them, the optional W&B/Weave trackers.
 
 ## Pipeline
 
-| Stage | What happens |
-|---|---|
+| Stage        | What happens                                                                                                                |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- |
 | **generate** | Synthesise prompts from the character spec and generate candidate responses (OpenRouter teacher, the local model, or both). |
-| **judge** | Score/compare candidates with Jev against the rubric. |
-| **curate** | Split prompts into train/validation/eval, filter by score, and (in `-i`) collect human review decisions. |
-| **train** | SFT warm-up and/or DPO with LoRA / QLoRA / FFT, using a hardware-feasible preset. |
-| **evaluate** | Held-out evaluation of the base model vs the fine-tuned adapter on the *same* prompts. |
-| **inspect** | Browse runs, artefacts, metrics, and the full event history. |
+| **judge**    | Score/compare candidates with Jev against the rubric.                                                                       |
+| **curate**   | Split prompts into train/validation/eval, filter by score, and (in `-i`) collect human review decisions.                    |
+| **train**    | SFT warm-up and/or DPO with LoRA / QLoRA / FFT, using a hardware-feasible preset.                                           |
+| **evaluate** | Held-out evaluation of the base model vs the fine-tuned adapter on the _same_ prompts.                                      |
+| **inspect**  | Browse runs, artefacts, metrics, and the full event history.                                                                |
 
 ## Install
 
@@ -46,7 +46,6 @@ uv run autorlhf --doctor
 Requires Python 3.11 or 3.12. CPU-only machines can still generate/judge/curate data and
 run the tiny CPU LoRA preset.
 
-
 ## Credentials
 
 Run the setup wizard (masked input, written `0600`):
@@ -55,12 +54,12 @@ Run the setup wizard (masked input, written `0600`):
 uv run autorlhf --setup
 ```
 
-| Key | Required | Purpose |
-|---|---|---|
-| `OPENROUTER_API_KEY` | yes | Generation and Jev judgements. |
-| `HF_TOKEN` | optional | Gated/private model repositories. |
-| `WANDB_API_KEY` / `WANDB_PROJECT` / `WANDB_ENTITY` | optional | Training metrics to W&B. |
-| `WEAVE_PROJECT` / `WEAVE_ENABLED` | optional | Prompt/response/judgement traces to Weave. |
+| Key                                                | Required | Purpose                                    |
+| -------------------------------------------------- | -------- | ------------------------------------------ |
+| `OPENROUTER_API_KEY`                               | yes      | Generation and Jev judgements.             |
+| `HF_TOKEN`                                         | optional | Gated/private model repositories.          |
+| `WANDB_API_KEY` / `WANDB_PROJECT` / `WANDB_ENTITY` | optional | Training metrics to W&B.                   |
+| `WEAVE_PROJECT` / `WEAVE_ENABLED`                  | optional | Prompt/response/judgement traces to Weave. |
 
 Secrets live in `~/.local/share/autorlhf/config.env` (or `$AUTORLHF_HOME/config.env`).
 A project-local `.env` is read as a lowest-precedence fallback but never written;
@@ -109,7 +108,7 @@ The formats are frozen in `docs/DATA_FORMATS.md`; every record carries `run_id`,
 ## Training, resuming, inspecting
 
 Training picks a preset from `config.presets` that the **measured** hardware can actually
-run; the judge may only *rank* the surviving presets, never invent hyperparameters.
+run; the judge may only _rank_ the surviving presets, never invent hyperparameters.
 Runs are resumable from their last complete checkpoint — resuming reloads the saved
 `config.json` so a run can never silently change its model, prompt, or data.
 
@@ -118,6 +117,8 @@ browse its phases, metrics, samples, and full `history.jsonl`. In the live run s
 Verbose (or press `v`) to stream per-prompt evaluation, generation/judgement details,
 and OpenRouter API request/response activity into the Activity widget. These verbose events
 are also retained in the run history.
+
+Use **Abandon** (or press x) on an incomplete run in the dashboard to permanently delete its database record and run artifacts. A confirmation prompt prevents accidental deletion.
 
 ## Base vs fine-tuned evaluation
 
@@ -129,11 +130,11 @@ marked **inconclusive** rather than reported as a win.
 
 ## Hardware requirements per method
 
-| Method | Requirement | Notes |
-|---|---|---|
-| **LoRA** | CPU-capable (tiny preset, no VRAM floor) up to >= 24 GiB GPU | Default; adapter is a few MB. |
-| **QLoRA** | CUDA GPU with `bitsandbytes`, >= 6 GiB VRAM | 4-bit NF4 base; CUDA-only at runtime. |
-| **FFT** | >= 48 GiB VRAM (large GPU / multi-GPU) | **Experimental**; rewrites every weight. |
+| Method    | Requirement                                                  | Notes                                    |
+| --------- | ------------------------------------------------------------ | ---------------------------------------- |
+| **LoRA**  | CPU-capable (tiny preset, no VRAM floor) up to >= 24 GiB GPU | Default; adapter is a few MB.            |
+| **QLoRA** | CUDA GPU with `bitsandbytes`, >= 6 GiB VRAM                  | 4-bit NF4 base; CUDA-only at runtime.    |
+| **FFT**   | >= 48 GiB VRAM (large GPU / multi-GPU)                       | **Experimental**; rewrites every weight. |
 
 Presets that require an accelerator are gated on a detected CUDA/ROCm/MPS/XLA device and
 on the estimated VRAM fitting the measured total. On a CPU-only machine only the tiny
@@ -144,7 +145,7 @@ LoRA preset is offered.
 Jev is an **AI judge**: this is RLAIF (reinforcement/feedback from AI), not human
 preference data. Running with `-i` adds real human review decisions, which are recorded
 alongside the automated ones. A Jev score probability is a **preference judgement** — it
-is *not* a probability that training will succeed.
+is _not_ a probability that training will succeed.
 
 ## Privacy
 
@@ -164,7 +165,7 @@ is *not* a probability that training will succeed.
 - **No automatic model upload or publishing.** Fine-tuned adapters stay on disk; you
   upload them yourself.
 - **No hyperparameter search.** Training uses a fixed, curated preset set filtered by
-  measured hardware; Jev may only *rank* feasible presets.
+  measured hardware; Jev may only _rank_ feasible presets.
 - **Jev never generates prose.** It is a typed decision model (score/choice/noul), not an
   LLM, and is not used for text generation.
 - **FFT is experimental** and gated behind a large-VRAM requirement.

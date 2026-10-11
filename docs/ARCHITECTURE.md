@@ -5,14 +5,14 @@ agent updating this file first.
 
 ## Ownership
 
-| Owner | Paths |
-|---|---|
-| **lead** | `pyproject.toml`, `src/autorlhf/core/**`, `src/autorlhf/config/**`, `src/autorlhf/storage/**`, `src/autorlhf/llm/schemas.py`, `pytest.ini`-level config |
-| **A — TUI** | `src/autorlhf/cli.py`, `src/autorlhf/__main__.py`, `src/autorlhf/tui/**`, `tests/test_tui_*.py` |
-| **B — training** | `src/autorlhf/training/**`, `tests/test_training_*.py` |
-| **C — llm + pipeline** | `src/autorlhf/llm/client.py`, `src/autorlhf/llm/jev.py`, `src/autorlhf/pipeline/**`, `tests/test_llm_*.py`, `tests/test_pipeline_*.py` |
+| Owner                     | Paths                                                                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **lead**                  | `pyproject.toml`, `src/autorlhf/core/**`, `src/autorlhf/config/**`, `src/autorlhf/storage/**`, `src/autorlhf/llm/schemas.py`, `pytest.ini`-level config                        |
+| **A — TUI**               | `src/autorlhf/cli.py`, `src/autorlhf/__main__.py`, `src/autorlhf/tui/**`, `tests/test_tui_*.py`                                                                                |
+| **B — training**          | `src/autorlhf/training/**`, `tests/test_training_*.py`                                                                                                                         |
+| **C — llm + pipeline**    | `src/autorlhf/llm/client.py`, `src/autorlhf/llm/jev.py`, `src/autorlhf/pipeline/**`, `tests/test_llm_*.py`, `tests/test_pipeline_*.py`                                         |
 | **D — integrations/docs** | `src/autorlhf/integrations/**`, `src/autorlhf/doctor.py`, `src/autorlhf/setup_env.py`, `.env.example`, `README.md`, `docs/*` (except this file), `tests/test_integration_*.py` |
-| **E — foundation tests** | `tests/test_foundation_*.py` |
+| **E — foundation tests**  | `tests/test_foundation_*.py`                                                                                                                                                   |
 
 ## Dependency direction
 
@@ -39,8 +39,8 @@ function) so the TUI can start in well under a second.
 - `autorlhf.core.types` — `ChatMessage`, `HardwareInfo`, `ResourceEstimate`,
   `GenerationRequest`, `GenerationResult`.
 - `autorlhf.core.events` — `EventBus.emit(kind, message, *, run_id, phase, step,
-  fraction, level, verbose_only, **data)`. Kinds: `status|phase|progress|log|sample|
-  judgment|metric|warning|error|artifact|counters`.
+fraction, level, verbose_only, **data)`. Kinds: `status|phase|progress|log|sample|
+judgment|metric|warning|error|artifact|counters`.
 - `autorlhf.core.errors` — typed exceptions (see file).
 - `autorlhf.core.logging` — `configure_logging`, `get_logger`, redaction.
 - `autorlhf.core.ids` — `content_hash`, `new_run_id`, `slugify`, `run_folder_name`.

@@ -83,7 +83,7 @@ training stack imports with versions (torch, transformers, trl, peft, datasets, 
 optional extras (bitsandbytes, wandb, weave) present-but-off; hardware (delegate to
 `autorlhf.training.hardware.detect_hardware` inside a try/except so a broken torch install
 reports instead of crashing); writability of the config/data dirs; secret file permissions
-(warn if not `0600` on POSIX); which credentials are present (report the *masked* form via
+(warn if not `0600` on POSIX); which credentials are present (report the _masked_ form via
 `Environment.secrets.describe()`, never a value); and, when `live=True`, an OpenRouter
 credential check via `OpenRouterClient.verify_credentials()` plus a HF token check. Every
 failure must carry a `remediation` string. `run_doctor` must never raise.

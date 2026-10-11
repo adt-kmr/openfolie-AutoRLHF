@@ -52,7 +52,7 @@ Jev is a typed decision model, not an LLM. Use only `score`, `choice`, `noul`.
   candidate response; `questions` are built from the rubric
   (`Rubric.questions_for_judge()`), one `score` question per criterion with ordered,
   clearly described levels. Keep the request within Jev's 32k context by truncating the
-  *response* (never the rubric) and recording that in `Judgement.raw`.
+  _response_ (never the rubric) and recording that in `Judgement.raw`.
 - Map every answer into `CriterionScore` (score, `probabilities`, `legend`, `confidence`,
   `answer_type`). Missing/failed criteria keep `score=None` and an `error` string. Use
   `Rubric.overall(...)` for `overall`. Record `judge_build` from the response's `model`
@@ -72,11 +72,13 @@ Jev is a typed decision model, not an LLM. Use only `score`, `choice`, `noul`.
 ## `pipeline/**`
 
 ### `models.py`
+
 `DatasetBundle`, `ReviewItem`, `ReviewDecision` exactly as specified in
 `docs/ARCHITECTURE.md`, plus small helpers:
 `DatasetBundle.to_summary()`, `ReviewItem.apply_human(decision)`.
 
 ### `prompts.py` — synthetic prompt generation
+
 - Build a diverse prompt set from the character spec + seeds with the teacher model:
   ordinary interactions, varied phrasings, context-following (a prior turn plus a
   follow-up), multi-turn continuations of a seed, edge cases, and explicit boundary probes
@@ -90,6 +92,7 @@ Jev is a typed decision model, not an LLM. Use only `score`, `choice`, `noul`.
   turn, when `EvaluationConfig.include_seed_prompts`).
 
 ### `candidates.py` — candidate responses
+
 - Generate `candidates_per_prompt` responses per prompt from `teacher` (OpenRouter),
   `local` (the HF model through `autorlhf.training.models.generate_text`, loaded once and
   kept alive), or `mixed`.
@@ -100,6 +103,7 @@ Jev is a typed decision model, not an LLM. Use only `score`, `choice`, `noul`.
 - Emit progress events; respect `cancel_event`/`pause_event`; bound concurrency.
 
 ### `splits.py` — prompt-level splits
+
 - Assign prompts to `train`/`validation`/`eval` **before** any response is generated, by
   prompt id, honouring `eval_fraction`, `validation_fraction`, `min_eval_prompts`,
   `min_train_prompts`, `seed`. Stratify across categories so edge cases and boundary
@@ -110,6 +114,7 @@ Jev is a typed decision model, not an LLM. Use only `score`, `choice`, `noul`.
   (this is the anti-leakage invariant).
 
 ### `dataset.py` — records and validation
+
 - Build the `dataset.jsonl` / `sft.jsonl` / `preferences.jsonl` records per
   `docs/DATA_FORMATS.md`; write atomically via `autorlhf.storage.runs.append_jsonl`, and
   support rewriting a record after an edit (rewrite the file atomically).
@@ -125,6 +130,7 @@ Jev is a typed decision model, not an LLM. Use only `score`, `choice`, `noul`.
 - `load_dataset(paths) -> DatasetBundle` for resume and for the TUI's dataset screen.
 
 ### `preferences.py` — preference construction
+
 - For each prompt, take its accepted candidates, score them, then compare the best two (or
   the two highest-margin) with `JevEvaluator.compare_responses`.
 - Accept a pair only when the evidence supports it: the judge's winner is decisive, the
@@ -136,6 +142,7 @@ Jev is a typed decision model, not an LLM. Use only `score`, `choice`, `noul`.
 - Never manufacture a preference label from a tiny difference; a tie is a valid outcome.
 
 ### `review.py` — `ReviewQueue`
+
 Exactly the class in `docs/ARCHITECTURE.md`, backed by the `reviews` table.
 `submit_items` persists each item (`status="pending"`) and emits a bus event
 (`kind="sample"`, `data={"review_item": item.model_dump(mode="json")}`) so the TUI can
@@ -145,12 +152,13 @@ fresh process resume an interrupted review session. Human edits must be applied 
 stored item and to the dataset records.
 
 ### `evaluate.py` — baseline/final evaluation and comparison
+
 - `evaluate_model(...)`: generate a response for every held-out `EvalPrompt` from a named
   variant (`base` or `finetuned`), then judge each with the same rubric. Same prompts, same
   rubric, same judge model for both variants. Support loading the adapter
   (`PeftModel.from_pretrained`) and, for the base variant, either the raw base model or the
   adapter with `disable_adapter()`.
-- Aggregate per-criterion means over *scored* responses only, count
+- Aggregate per-criterion means over _scored_ responses only, count
   `failed_judgements`/`requested_judgements`, and list prompts with no usable judgement.
 - `compare_reports(base, final, *, pairwise_pairs) -> ComparisonReport`: per-criterion
   means, deltas, overall, pairwise win/tie/inconclusive counts, and representative
@@ -162,10 +170,12 @@ stored item and to the dataset records.
 - Save `baseline_eval.json`, `final_eval.json`, `comparison.json`.
 
 ### `orchestrate.py` — `PipelineRunner`
+
 Exactly the methods in `docs/ARCHITECTURE.md`. Each one:
+
 - validates its preconditions first (credentials present, config valid, model metadata
   resolvable) and raises `CredentialError`/`ConfigError`/`InsufficientDataError` with an
-  actionable hint *before* spending money;
+  actionable hint _before_ spending money;
 - advances `RunStatus` through `RunStore.update_status` (transitions are validated — check
   `autorlhf.core.enums.can_transition` if a step seems stuck);
 - updates counters, persists artifacts, refreshes the manifest

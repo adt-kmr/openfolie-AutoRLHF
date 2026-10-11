@@ -45,17 +45,26 @@ async def test_dashboard_lists_incomplete_runs_and_details(app_paths, store, bus
         assert "training_dpo" in detail
 
 
-async def test_dashboard_abandons_a_run(app_paths, store, bus, run_config):
-    run_id, _paths = make_run(store, app_paths, run_config, status=RunStatus.PREPARING_DATA)
+async def test_dashboard_abandons_a_run_and_deletes_its_data(app_paths, store, bus, run_config):
+    run_id, run_paths = make_run(store, app_paths, run_config, status=RunStatus.PREPARING_DATA)
     app = make_app(app_paths, store=store, bus=bus, config=run_config)
     async with running(app) as pilot:
         await pilot.pause()
         screen = app.screen
         assert isinstance(screen, DashboardScreen)
-        screen._abandon(run_id)
+        screen._confirm_abandon(run_id)
         await pilot.pause()
-        record = store.require_run(run_id)
-        assert record.status is RunStatus.CANCELLED
+        await pilot.click("#confirm-no")
+        await pilot.pause()
+        assert store.get_run(run_id) is not None
+        screen._confirm_abandon(run_id)
+        await pilot.pause()
+        await pilot.click("#confirm-yes")
+        await pilot.pause()
+        await pilot.pause()
+        assert store.get_run(run_id) is None
+        assert not run_paths.root.exists()
+        assert screen.query_one("#runs-table", DataTable).row_count == 0
         assert screen._incomplete == []
 
 

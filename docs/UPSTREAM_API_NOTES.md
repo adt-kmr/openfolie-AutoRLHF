@@ -1,24 +1,24 @@
-# Upstream API notes (verified against the *installed* versions)
+# Upstream API notes (verified against the _installed_ versions)
 
 Probed on the real virtualenv, not from memory. Re-probe with a throwaway script if
 you doubt anything here; do not code from an assumption.
 
 Installed versions:
 
-| package | version | notes |
-|---|---|---|
-| torch | 2.14.1 | CPU wheel works; no GPU on the dev machine |
-| transformers | **5.19.0** | major-version API differences below |
-| trl | **1.15.0** | `processing_class`, `max_length`, `SFTConfig`/`DPOConfig` |
-| peft | 0.21.2 | `get_peft_model`, `prepare_model_for_kbit_training`, `PeftModel` |
-| datasets | 5.1.0 | |
-| accelerate | 1.15.0 | |
-| bitsandbytes | 0.50.2 | installed, but CUDA-only at runtime |
-| textual | **8.2.8** | |
-| openrouter | 1.3.43 | official SDK; see below |
-| wandb / weave | 0.30.0 / 0.53.12 | optional extras |
-| pydantic | 2.12.5 | |
-| rich | 15.0.0 | |
+| package       | version          | notes                                                            |
+| ------------- | ---------------- | ---------------------------------------------------------------- |
+| torch         | 2.14.1           | CPU wheel works; no GPU on the dev machine                       |
+| transformers  | **5.19.0**       | major-version API differences below                              |
+| trl           | **1.15.0**       | `processing_class`, `max_length`, `SFTConfig`/`DPOConfig`        |
+| peft          | 0.21.2           | `get_peft_model`, `prepare_model_for_kbit_training`, `PeftModel` |
+| datasets      | 5.1.0            |                                                                  |
+| accelerate    | 1.15.0           |                                                                  |
+| bitsandbytes  | 0.50.2           | installed, but CUDA-only at runtime                              |
+| textual       | **8.2.8**        |                                                                  |
+| openrouter    | 1.3.43           | official SDK; see below                                          |
+| wandb / weave | 0.30.0 / 0.53.12 | optional extras                                                  |
+| pydantic      | 2.12.5           |                                                                  |
+| rich          | 15.0.0           |                                                                  |
 
 ## transformers 5.19
 
@@ -30,9 +30,9 @@ Installed versions:
   (import path: `from transformers import BitsAndBytesConfig`).
 - Chat templates live on the tokenizer instance:
   `tokenizer.apply_chat_template(conversation, tools=None, documents=None, chat_template=None,
-  add_generation_prompt=False, continue_final_message=False, tokenize=True, padding=False,
-  truncation=False, max_length=None, return_tensors=None, return_dict=True,
-  return_assistant_tokens_mask=False, tokenizer_kwargs=None, **kwargs)`.
+add_generation_prompt=False, continue_final_message=False, tokenize=True, padding=False,
+truncation=False, max_length=None, return_tensors=None, return_dict=True,
+return_assistant_tokens_mask=False, tokenizer_kwargs=None, **kwargs)`.
   `tokenizer.chat_template` is `None` for tokenizers that ship none → that must be an
   explicit, explained fallback, never a silent default.
 - Offline unit tests: `AutoConfig.for_model("gpt2", ...)` /
@@ -83,6 +83,7 @@ model.print_trainable_parameters()
 model.disable_adapter()   # -> base-model behaviour, useful for comparisons
 PeftModel.from_pretrained(base, "path/to/adapter")
 ```
+
 `LoraConfig` has `target_parameters`, `rank_pattern`, `alpha_pattern`, `modules_to_save`,
 `exclude_modules`. `fan_in_fan_out=True` is required for GPT-2's `c_attn` fused
 projection. `prepare_model_for_kbit_training(model, use_gradient_checkpointing=...)`
@@ -113,14 +114,31 @@ default. (Confirmed by reading `openrouter/decisions.py`: `path="/api/alpha/deci
 Wire format for decisions (from the OpenRouter docs):
 
 ```json
-{"model":"typesafe/jev-1.13",
- "state":{"any":"json"},
- "questions":{"is_bug":{"type":"noul","instructions":"...","criteria":{"true":"...","false":"..."}},
-              "team":{"type":"choice","instructions":"...","criteria":{"a":"...","b":"..."}},
-              "urgency":{"type":"score","instructions":"...","criteria":["lowest","middle","highest"]}}}
+{
+  "model": "typesafe/jev-1.13",
+  "state": { "any": "json" },
+  "questions": {
+    "is_bug": {
+      "type": "noul",
+      "instructions": "...",
+      "criteria": { "true": "...", "false": "..." }
+    },
+    "team": {
+      "type": "choice",
+      "instructions": "...",
+      "criteria": { "a": "...", "b": "..." }
+    },
+    "urgency": {
+      "type": "score",
+      "instructions": "...",
+      "criteria": ["lowest", "middle", "highest"]
+    }
+  }
+}
 ```
+
 Response: `{"id","model","provider","answers":{...},"usage":{"input_tokens","output_tokens","cost"}}`
-where each answer carries `type`; `score` has `score` + `legend` (``"0"``,``"1"``… → level
+where each answer carries `type`; `score` has `score` + `legend` (`"0"`,`"1"`… → level
 text) + `probabilities` + `confidence`; `choice` has `choice` + `probabilities` +
 `confidence`; `noul` has `noul` (P(true)).
 

@@ -15,18 +15,19 @@ Do not edit any other file.
   the dashboard fast. `import autorlhf.training.jobs` must not pull in `torch`/`trl` at
   module import time either — import them inside `TrainingJob.run()`.
 - On this dev machine there is **no GPU**: LoRA must be runnable on CPU for tiny models,
-  and QLoRA/FFT must be *honestly disabled* with a specific reason.
+  and QLoRA/FFT must be _honestly disabled_ with a specific reason.
 - Never use `bitsandbytes` unless the preflight confirmed it is usable.
 
 ## Modules
 
 ### `hardware.py`
+
 - `detect_hardware(*, with_bitsandbytes=True) -> HardwareInfo` (from
   `autorlhf.core.types`). Detect: device type (cuda/rocm/mps/xpu/cpu), device name and
   count, total/free VRAM via `torch.cuda.mem_get_info` when available, system RAM from
   `/proc/meminfo` on Linux and `psutil`-free fallbacks elsewhere, CPU count, torch/CUDA
   versions, bf16/fp16 support (`torch.cuda.is_bf16_supported`, MPS checks), whether
-  bitsandbytes imports *and* can quantize on this device, flash-attn availability, and
+  bitsandbytes imports _and_ can quantize on this device, flash-attn availability, and
   importable package versions (`packages`). Record caveats in `estimate_notes` (e.g.
   "VRAM totals are measured, per-run estimates are modelled") and problems in `warnings`.
   Distinguish measured from estimated everywhere. Never raise for a missing optional
@@ -36,6 +37,7 @@ Do not edit any other file.
   implementation.
 
 ### `models.py`
+
 - `load_tokenizer(cfg: HFModelConfig, *, hf_token, allow_fallback=None) -> (tokenizer, warnings)`.
   Clear `ChatTemplateError` when the tokenizer ships no chat template and the fallback was
   not opted into; when it is, install a **documented generic** template and say so in
@@ -44,7 +46,7 @@ Do not edit any other file.
 - `load_model(cfg, hp, *, hf_token, for_training=False, device=None) -> LoadedModel`
   (`dtype=`, `attn_implementation=`, `device_map`/`.to(device)`, `revision=`).
   For QLoRA build `BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type=...,
-  bnb_4bit_use_double_quant=..., bnb_4bit_compute_dtype=torch.bfloat16/float16)` and
+bnb_4bit_use_double_quant=..., bnb_4bit_compute_dtype=torch.bfloat16/float16)` and
   refuse to build it when `hw` says unsupported. Raise `OutOfMemoryError` with an
   actionable hint on OOM, `UnsupportedArchitectureError` when the config is not a causal
   LM, `ModelLoadError` for unknown/gated repo ids (mention `HF_TOKEN` when the error
@@ -56,10 +58,11 @@ Do not edit any other file.
   fetch a multi-GB model.
 - Optional helper for local generation used by the pipeline:
   `generate_text(model, tokenizer, messages, *, max_new_tokens, temperature, top_p, seed,
-  device) -> (text, meta)` with `model.generate` and a do_sample/temperature combination
+device) -> (text, meta)` with `model.generate` and a do_sample/temperature combination
   that is valid when temperature <= 0.
 
 ### `lora.py`
+
 - `infer_family(model) -> str` from `model.config.model_type` / architecture name.
 - `discover_target_modules(model, *, preferred=None) -> (targets, notes)`: walk the real
   module names (`dict(model.named_modules())`), infer sensible targets per family
@@ -73,10 +76,12 @@ Do not edit any other file.
   buried.
 
 ### `plan.py`
+
 `TrainingPlan` exactly as specified in `docs/ARCHITECTURE.md` (pydantic model, `to_json`,
 `save`). It is the object the TUI shows before training and the trainers consume.
 
 ### `trainers.py`
+
 - `build_sft_config(hp, paths, *, run_name, report_to) -> SFTConfig` and
   `build_dpo_config(hp, paths, *, run_name, report_to) -> DPOConfig`, mapping every field
   of `Hyperparameters` (`max_length`, not `max_seq_length`; `completion_only_loss`,
@@ -104,7 +109,9 @@ Do not edit any other file.
   (`paths.checkpoints_dir / objective.value`).
 
 ### `jobs.py`
+
 `TrainingJob` and `TrainingResult` exactly as specified. `TrainingJob.run()`:
+
 - computes `find_resume_checkpoint` when `resume_from` is not given and the run is being
   resumed,
 - runs the SFT warm-up first when `plan.hyperparameters.sft_warmup` and there are enough

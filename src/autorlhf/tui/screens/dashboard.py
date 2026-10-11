@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import shutil
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -10,6 +13,7 @@ from textual.widgets import Button, DataTable, Footer, Header, Label, ListItem, 
 from autorlhf.core.enums import RunStatus, can_transition
 from autorlhf.storage.db import RunRecord
 from autorlhf.tui.screens.base import AutorlhfScreen
+from autorlhf.tui.widgets.modals import ConfirmModal
 
 RUN_COLUMNS = ("Run", "Created", "Model", "Objective/Method", "Status", "Step", "Checkpoint")
 
@@ -161,7 +165,7 @@ class DashboardScreen(AutorlhfScreen):
         record = self._selected_record()
         if record is None:
             return
-        self._abandon(record.id)
+        self._confirm_abandon(record.id)
 
     def action_run_doctor(self) -> None:
         self._show_doctor()
@@ -194,7 +198,7 @@ class DashboardScreen(AutorlhfScreen):
         elif event.button.id == "btn-restart":
             self._restart(record.id)
         elif event.button.id == "btn-abandon":
-            self._abandon(record.id)
+            self._confirm_abandon(record.id)
 
     # -- operations -------------------------------------------------------- #
 
@@ -243,20 +247,82 @@ class DashboardScreen(AutorlhfScreen):
             return
         self.refresh_runs()
 
+    def _confirm_abandon(self, run_id: str) -> None:
+        try:
+            record = self.state.store.require_run(run_id)
+        except KeyError as exc:
+            self.query_one("#run-detail", Static).update(str(exc))
+            return
+        if (
+            not can_transition(record.status, RunStatus.CANCELLED)
+            and record.status is not RunStatus.CANCELLED
+        ):
+            self.query_one("#run-detail", Static).update(
+                f"{run_id} is {record.status.value}; cannot abandon it"
+            )
+            return
+        modal = ConfirmModal(
+            f"Permanently delete run {run_id}, including its files and history? This cannot be undone.",
+            title="Delete run",
+            confirm="Delete run",
+            cancel="Keep run",
+        )
+        self.autorlhf.push_screen(
+            modal, lambda confirmed: self._abandon(run_id) if confirmed else None
+        )
+
     def _abandon(self, run_id: str) -> None:
         detail = self.query_one("#run-detail", Static)
-        store = self.state.store
         try:
-            record = store.require_run(run_id)
+            record = self.state.store.require_run(run_id)
         except KeyError as exc:
             detail.update(str(exc))
             return
-        if not can_transition(record.status, RunStatus.CANCELLED):
+        if (
+            not can_transition(record.status, RunStatus.CANCELLED)
+            and record.status is not RunStatus.CANCELLED
+        ):
             detail.update(f"{run_id} is {record.status.value}; cannot abandon it")
             return
-        store.update_status(run_id, RunStatus.CANCELLED, note="abandoned from the dashboard")
-        detail.update(f"{run_id} abandoned (state kept on disk for inspection)")
+
+        app = self.autorlhf
+        worker = app.worker
+        thread = app._worker_thread
+        active_thread = (
+            thread
+            if worker is not None
+            and worker.run_id == run_id
+            and thread is not None
+            and thread.is_alive()
+            else None
+        )
+        if active_thread is not None:
+            app.request_stop()
+        detail.update(f"Deleting run {run_id}…")
+        asyncio.create_task(self._finish_abandon(run_id, active_thread))
+
+    async def _finish_abandon(self, run_id: str, thread) -> None:
+        detail = self.query_one("#run-detail", Static)
+        try:
+            if thread is not None:
+                await asyncio.to_thread(thread.join)
+            record = self.state.store.require_run(run_id)
+            run_dir = self.state.env.paths.run_dir(record.folder)
+            runs_dir = self.state.env.paths.runs_dir.resolve()
+            if run_dir.is_symlink() or run_dir.resolve().parent != runs_dir:
+                raise ValueError(f"refusing to delete run directory outside {runs_dir}: {run_dir}")
+            if run_dir.exists():
+                await asyncio.to_thread(shutil.rmtree, run_dir)
+            self.state.store.delete_run(run_id)
+        except Exception as exc:  # noqa: BLE001 - keep the UI alive and report failed deletion
+            detail.update(f"could not delete {run_id}: {exc}")
+            return
+        if self.state.run_id == run_id:
+            self.state.run_id = None
+            self.state.paths = None
+            self.state.config = None
         self.refresh_runs()
+        detail.update(f"Run {run_id} deleted")
 
     def _show_doctor(self) -> None:
         detail = self.query_one("#run-detail", Static)
