@@ -340,6 +340,12 @@ def e2e_config(tiny_chat_model_dir: Path) -> RunConfig:
     config.generation.min_eval_prompts = 2
     config.generation.min_train_prompts = 2
     config.generation.max_concurrency = 2
+    # Greedy local generation with a modest budget: the 512-token context of the
+    # tiny fixture would be overrun by the default 512 new tokens, and its random
+    # weights can otherwise emit an empty completion.  Greedy + a small budget
+    # keeps the acceptance test deterministic and judged.
+    config.generation.temperature = 0.0
+    config.generation.max_new_tokens = 24
     config.evaluation.max_eval_prompts = 8
     config.evaluation.pairwise = True
 

@@ -170,6 +170,10 @@ def build_tiny_model(
     path; ``architecture="llama"`` exercises the ``q_proj``/``k_proj``/... path.
     """
 
+    import torch
+
+    torch.manual_seed(1234)
+
     out_dir.mkdir(parents=True, exist_ok=True)
     if architecture == "gpt2":
         from transformers import GPT2Config, GPT2LMHeadModel
@@ -199,6 +203,32 @@ def build_tiny_model(
             eos_token_id=vocab_size - 2,
         )
         model = LlamaForCausalLM(config)
+
+    # A randomly initialised model answers with EOS or whitespace first, which
+    # the pipeline (correctly) counts as a failed judgement — making held-out
+    # evaluation meaningless and non-deterministic.  Run a brief SFT so the
+    # model reliably produces text; the fixture then behaves like a real (if
+    # tiny) causal LM.
+    alphabet_ids = {chr(i): i - 32 for i in range(32, 127)}
+
+    def _to_ids(text: str) -> torch.Tensor:
+        return torch.tensor(
+            [alphabet_ids[ch] for ch in text if ch in alphabet_ids], dtype=torch.long
+        )
+
+    examples = [
+        "user: hello\nassistant: hello there",
+        "user: bye\nassistant: good day friend",
+    ]
+    sequences = [_to_ids(example) for example in examples]
+    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-2)
+    model.train()
+    for _ in range(150):
+        for sequence in sequences:
+            optimizer.zero_grad()
+            loss = model(sequence.unsqueeze(0), labels=sequence.unsqueeze(0)).loss
+            loss.backward()
+            optimizer.step()
 
     model.save_pretrained(str(out_dir), safe_serialization=False)
     return out_dir

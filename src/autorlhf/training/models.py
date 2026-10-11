@@ -232,11 +232,7 @@ GENERIC_TEMPLATE_MARKER = "_autorlhf_generic_chat_template"
 def chat_template_source(tokenizer: Any) -> str:
     """``"tokenizer"`` or ``"generic-fallback"`` for the template in use."""
 
-    return (
-        "generic-fallback"
-        if getattr(tokenizer, GENERIC_TEMPLATE_MARKER, False)
-        else "tokenizer"
-    )
+    return "generic-fallback" if getattr(tokenizer, GENERIC_TEMPLATE_MARKER, False) else "tokenizer"
 
 
 def build_chat_prompt(tokenizer: Any, messages: list[ChatMessage] | list[dict[str, str]]) -> str:
