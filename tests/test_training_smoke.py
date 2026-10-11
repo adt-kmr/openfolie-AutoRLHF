@@ -674,8 +674,6 @@ def test_training_job_reuses_warmup_adapter_and_resumes_dpo(
 def test_tracking_is_not_touched_when_disabled(
     tmp_path, bus: EventBus, run_config: RunConfig
 ) -> None:
-    import sys
-
     hp = _hp()
     plan = _plan(objective=TrainingObjective.SFT, hp=hp, sft=_sft_records(1))
     job = _job(tmp_path=tmp_path, plan=plan, config=run_config, bus=bus)
@@ -683,7 +681,9 @@ def test_tracking_is_not_touched_when_disabled(
     assert job._report_to() == []
     assert job._wandb_url() is None
     job._start_tracking()
-    assert "autorlhf.integrations.tracking" not in sys.modules
+    # (lazy-import inertness is asserted in a fresh subprocess by
+    # tests/test_integration_tracking.py; an in-process sys.modules check would
+    # depend on test ordering once the tracking module is imported elsewhere.)
 
 
 def test_tracking_wrapper_is_used_when_enabled(
